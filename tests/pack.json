@@ -1,0 +1,51 @@
+{
+  "format": "XHGC_PACK",
+  "pack_version": 1,
+
+  "meta": {
+    "title": "Demo Game",
+    "title_zh": "演示游戏",
+    "publisher": "Nixie Studio",
+    "version": "0.1.0",
+    "cart_id": "0x0123456789ABCDEF",
+    "entry": "app/main.lua",
+    "min_fw": "0.8.0"
+  },
+
+  "icon": {
+    "path": "meta/icon.png",
+    "format": "ARGB8888",
+    "width": 200,
+    "height": 200,
+    "preprocess": {
+      "mode": "cover",
+      "background": "#000000",
+      "resample": "lanczos"
+    }
+  },
+
+  "hash": {
+    "header_crc32": true,
+    "image_crc32": false
+  },
+
+  "chunks": [
+    {
+      "type": "MANF",
+      "source": "inline_meta",
+      "name": "meta/manifest.json"
+    },
+    {
+      "type": "LUA ",
+      "glob": "app/**/*.lua",
+      "name_prefix": "app/",
+      "compress": "none"
+    },
+    {
+      "type": "RES ",
+      "glob": "assets/lvgl/**/*",
+      "name_prefix": "assets/lvgl/",
+      "compress": "none"
+    }
+  ]
+}

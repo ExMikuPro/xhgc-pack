@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: xhcart-core
+Version: 0.1.0
+Summary: XHGC Cart Packaging Tool
+Author-email: Nixie Studio <contact@nixie.studio>
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Provides-Extra: image
+Requires-Dist: Pillow>=10; extra == "image"
