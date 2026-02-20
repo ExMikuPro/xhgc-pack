@@ -3,7 +3,7 @@
   "pack_version": 1,
 
   "meta": {
-    "title": "Demo Game",
+    "title": "Hatsune Miku",
     "title_zh": "演示游戏",
     "publisher": "Nixie Studio",
     "version": "0.1.0",
@@ -18,7 +18,7 @@
     "width": 200,
     "height": 200,
     "preprocess": {
-      "mode": "cover",
+      "mode": "contain",
       "background": "#000000",
       "resample": "lanczos"
     }
@@ -37,7 +37,7 @@
     },
     {
       "type": "LUA ",
-      "glob": "app/**/*.lua",
+      "glob": "script/main.lua",
       "name_prefix": "app/",
       "compress": "none"
     },

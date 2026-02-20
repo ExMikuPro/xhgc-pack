@@ -2,6 +2,7 @@ from src.xhcart_core.config.load import load_pack_json
 from src.xhcart_core.format.xhgc.header import HeaderV2
 from src.xhcart_core.utils.io import atomic_write
 from src.xhcart_core.pipeline.build_icon import BuildIcon
+from src.xhcart_core.pipeline.build_entry import BuildEntry
 
 # 尝试导入Pillow，如果不可用则设置标志
 try:
@@ -53,6 +54,10 @@ def pack_header_icon(pack_json: str, out_path: str) -> None:
     # 创建BuildIcon对象并构建
     builder = BuildIcon(pack_spec)
     builder.build(out_path)
+    
+    # 创建BuildEntry对象并构建
+    entry_builder = BuildEntry(pack_spec)
+    entry_builder.build(out_path)
 
 def inspect_header(header_path: str) -> dict:
     """

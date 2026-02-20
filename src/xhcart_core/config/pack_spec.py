@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, List
 
 @dataclass
 class MetaSpec:
@@ -22,6 +22,7 @@ class BuildSpec:
     output: Optional[str] = None
     header_size: int = 4096
     align: int = 4096
+    entry_compile: bool = True
 
 @dataclass
 class HashSpec:
@@ -40,5 +41,6 @@ class PackSpec:
     build: BuildSpec
     icon: Optional[Dict[str, Any]] = None
     hash: Optional[HashSpec] = None
+    chunks: Optional[List[Dict[str, Any]]] = None
     pack_version: int = 1
     pack_json_path: Optional[str] = None  # 存储pack.json的路径，用于解析相对路径

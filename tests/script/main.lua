@@ -1,3 +1,23 @@
+-- Test main.lua entry point
+print("Hello, XHGC!")
+
+function start()
+    -- 初始化（只调用一次）
+    -- print("Initializing game...")
+    -- 测试 GPIO 功能
+    if gpio then
+        print("GPIO module available")
+    end
+    -- 测试 SD 功能
+    if sd then
+        print("SD module available")
+    end
+end
+
+function update(dt)
+    -- dt: 秒（float），默认固定 0.010
+    print("Updating game... dt = " .. dt)
+end
 -- ============================================================
 -- LuaPort STM32H743 功能测试脚本
 -- 测试范围：gpio / tim / delay / sd / 基础 Lua 语言特性

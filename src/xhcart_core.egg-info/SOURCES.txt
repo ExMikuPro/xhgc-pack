@@ -13,11 +13,15 @@ src/xhcart_core/config/pack_spec.py
 src/xhcart_core/domain/errors.py
 src/xhcart_core/format/xhgc/addr_table.py
 src/xhcart_core/format/xhgc/header.py
+src/xhcart_core/pipeline/build_entry.py
 src/xhcart_core/pipeline/build_icon.py
 src/xhcart_core/tools/img_pillow.py
+src/xhcart_core/tools/text_a8.py
 src/xhcart_core/utils/align.py
 src/xhcart_core/utils/hashing.py
 src/xhcart_core/utils/io.py
 src/xhcart_core/utils/path.py
+tests/test_entry.py
 tests/test_header.py
 tests/test_icon.py
+tests/test_text_a8.py

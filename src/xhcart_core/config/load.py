@@ -92,12 +92,16 @@ def load_pack_json(pack_json_path: str) -> PackSpec:
         if icon_data.get('height') != 200:
             raise ConfigError("icon.height must be 200")
     
+    # 解析chunks字段
+    chunks_data = data.get('chunks', [])
+    
     # 创建PackSpec
     pack_spec = PackSpec(
         meta=meta,
         build=build,
         icon=icon_data,
         hash=hash_spec,
+        chunks=chunks_data,
         pack_version=data.get('pack_version', 1),
         pack_json_path=pack_json_path
     )
