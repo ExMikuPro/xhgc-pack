@@ -6,6 +6,16 @@ from src.xhcart_core.utils.hashing import calculate_crc32
 from src.xhcart_core.format.xhgc.addr_table import AddrTable
 import subprocess
 import tempfile
+import sys
+import os
+
+def get_st_luac_path():
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包后，资源在 sys._MEIPASS 下
+        return os.path.join(sys._MEIPASS, 'tool', 'bin', 'st-luac')
+    else:
+        # 开发环境
+        return os.path.join(os.path.dirname(__file__), '..', '..', '..', 'tool', 'bin', 'st-luac')
 
 class BuildEntry:
     """
@@ -208,11 +218,11 @@ class BuildEntry:
 
         try:
             # 构建编译命令
-            luac_path = Path('tool/bin/st-luac')
+            luac_path = Path(get_st_luac_path())
             if not luac_path.exists():
                 raise ValueError(f"st-luac not found: {luac_path}")
 
-            cmd = ["tool/bin/st-luac", "-o", tmp_path, str(lua_path)]
+            cmd = [str(luac_path), "-o", tmp_path, str(lua_path)]
 
             # 执行编译命令
             result = subprocess.run(
