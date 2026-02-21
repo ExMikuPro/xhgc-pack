@@ -147,26 +147,36 @@ class BuildEntry:
     def _resolve_entry_path(self) -> Path:
         """
         解析entry路径
-        
+
         Returns:
             Path: entry文件路径
         """
-        # 从chunks数组中查找type为"LUA "的条目
-        lua_chunks = [chunk for chunk in self.pack_spec.chunks if chunk.get('type') == 'LUA']
-        
+        # 从chunks数组中查找type为"LUA"或"LUA "的条目
+        lua_chunks = [chunk for chunk in self.pack_spec.chunks if chunk.get('type', '').strip() == 'LUA']
+
         if not lua_chunks:
             raise ValueError("No LUA chunk found in pack.json")
-        
+
         # 获取第一个LUA条目的glob字段
         lua_chunk = lua_chunks[0]
-        entry_path = lua_chunk.get('glob')
-        
-        if not entry_path:
+        glob_pattern = lua_chunk.get('glob')
+
+        if not glob_pattern:
             raise ValueError("glob field missing in LUA chunk")
-        
-        # 解析为绝对路径（相对于pack.json所在目录）
-        from src.xhcart_core.utils.path import resolve_relative_path
-        return resolve_relative_path(entry_path, self.pack_spec.pack_json_path)
+
+        # 查找匹配的文件
+        pack_json_dir = Path(self.pack_spec.pack_json_path).parent
+        files = list(pack_json_dir.glob(glob_pattern))
+
+        if not files:
+            raise ValueError(f"No files found matching glob: {glob_pattern}")
+
+        # 获取第一个匹配的文件
+        lua_path = files[0]
+
+        # 解析为绝对路径
+        return lua_path
+
     
     def _compile_lua(self, lua_path: Path) -> bytes:
         """

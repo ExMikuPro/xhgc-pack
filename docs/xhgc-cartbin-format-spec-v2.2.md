@@ -200,6 +200,8 @@ typedef struct __attribute__((packed)) {
 
 - 来源：打包器根据 DATA 区内容**自动生成**，pack.json 中无需声明。
 - 用途：DATA 区的文件目录，解析端通过 INDEX 定位 DATA 内某个文件。
+- INDEX 与 DATA 是**独立的段**，INDEX 仅存储目录信息，不包含文件数据本身。
+- INDEX 中的 `data_offset` 是**相对 DATA 段起点的偏移**，不是文件在镜像中的绝对偏移。
 
 **INDEX Header（8 bytes）：**
 
@@ -214,10 +216,10 @@ typedef struct __attribute__((packed)) {
 
 ```c
 typedef struct __attribute__((packed)) {
-  uint32_t data_offset;   // 相对 DATA 段起点的字节偏移
+  uint32_t data_offset;   // 相对 DATA 段起点的字节偏移（非镜像绝对偏移）
   uint32_t data_size;     // 文件数据长度（bytes）
   uint32_t crc32;         // 文件 CRC32/IEEE（未启用填 0，对应 pack.json hash.per_file_crc32）
-  uint8_t  name_len;      // 包内路径字符串长度（bytes，不含 \0）
+  uint8_t  name_len;      // 包内路径字符串长度（bytes，不含 \0，最大 255）
   uint8_t  reserved[3];   // 预留，填 0
   // 紧跟：name_len bytes 的 UTF-8 包内路径（不含 \0）
 } XhgcIndexEntry;
@@ -234,6 +236,39 @@ typedef struct __attribute__((packed)) {
 ```
 
 - 所有条目按包内路径**字典序升序**排列（与 pack.json `order = "lex"` 对应），支持二分查找。
+- `name_len = 0` 的条目为非法条目，打包器**必须**报错，不得写入。
+
+**实际示例（来自验证数据）：**
+
+```
+INDEX Header:
+  entry_count = 2
+  reserved    = 0
+
+Entry[0]:
+  data_offset = 0           ← DATA 起点
+  data_size   = 11085       ← app/main.lua 大小
+  crc32       = 0xB15271F7
+  name_len    = 12
+  name        = "app/main.lua"
+
+Entry[1]:
+  data_offset = 11085       ← 紧接 main.lua 之后
+  data_size   = 2347227     ← PNG 大小
+  crc32       = 0xA8329165
+  name_len    = 50
+  name        = "assets/Gemini_Generated_Image_lt7ufalt7ufalt7u.png"
+```
+
+**文件读取流程：**
+
+```
+1. 读 slot4(INDEX) → 得到 INDEX 段偏移
+2. 遍历/二分查找 Entry，匹配目标路径
+3. 读 slot5(DATA) → 得到 DATA 段偏移
+4. 实际文件位置 = DATA段偏移 + entry.data_offset
+5. 读取 entry.data_size 字节 → 若压缩则解压
+```
 
 ### 7.4 DATA（slot5）
 
@@ -304,4 +339,4 @@ typedef struct __attribute__((packed)) {
 | 版本 | 日期 | 变更摘要 |
 |---|---|---|
 | v2.1 | - | 修订 ICON 段为 ARGB8888（200×200，160000B） |
-| v2.2 | 2026-02-21 | 补全 slot2(MANF) / slot4(INDEX) / slot5(DATA) 格式定义；补充完整镜像布局表；新增 INDEX 结构体定义；新增 pack.json → bin 对应关系速查；更新槽位说明与 pack.json 字段对应 |
+| v2.2 | 2026-02-21 | 补全 slot2(MANF) / slot4(INDEX) / slot5(DATA) 格式定义；补充完整镜像布局表；新增 INDEX 结构体定义及实际验证示例；明确 INDEX data_offset 为相对 DATA 段起点的偏移；新增文件读取流程；新增 pack.json → bin 对应关系速查；更新槽位说明与 pack.json 字段对应 |
