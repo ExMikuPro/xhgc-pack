@@ -26,7 +26,15 @@
 
   "hash": {
     "header_crc32": true,
-    "image_crc32": false
+    "image_crc32": false,
+    "per_chunk_crc32": false,
+    "per_file_crc32": false
+  },
+
+  "build": {
+    "alignment_bytes": 4096,
+    "deterministic": true,
+    "fail_on_conflict": true
   },
 
   "chunks": [
@@ -36,16 +44,22 @@
       "name": "meta/manifest.json"
     },
     {
-      "type": "LUA ",
+      "type": "LUA",
       "glob": "script/main.lua",
+      "strip_prefix": "script/",
       "name_prefix": "app/",
-      "compress": "none"
+      "compress": "none",
+      "exclude": ["**/.DS_Store"],
+      "order": "lex"
     },
     {
-      "type": "RES ",
-      "glob": "assets/lvgl/**/*",
-      "name_prefix": "assets/lvgl/",
-      "compress": "none"
+      "type": "RES",
+      "glob": "assets/**/*",
+      "strip_prefix": "assets/",
+      "name_prefix": "assets/",
+      "compress": "none",
+      "exclude": ["**/.DS_Store"],
+      "order": "lex"
     }
   ]
 }

@@ -131,7 +131,7 @@ class BuildEntry:
             # 最终组装数据
             cart_data = final_header_data + cart_data[self.HEADER_SIZE:] + luac_data + padding
         
-        # 原子写入文件
+        # bin写入文件
         atomic_write(out_path, cart_data)
         
         print(f"Successfully built cart.bin with entry: {out_path}")
@@ -152,7 +152,7 @@ class BuildEntry:
             Path: entry文件路径
         """
         # 从chunks数组中查找type为"LUA "的条目
-        lua_chunks = [chunk for chunk in self.pack_spec.chunks if chunk.get('type') == 'LUA ']
+        lua_chunks = [chunk for chunk in self.pack_spec.chunks if chunk.get('type') == 'LUA']
         
         if not lua_chunks:
             raise ValueError("No LUA chunk found in pack.json")
