@@ -38,6 +38,24 @@ XHGC 卡带镜像打包工具是一个用于构建 XHGC 卡带镜像（cart.bin�
 
 ## 使用方法
 
+
+### 编译为可执行文件
+
+```shell
+.venv/bin/pip install pyinstaller  
+```
+
+```shell
+.venv/bin/pyinstaller \
+  --onefile \
+  --name xhgc-pack \
+  --add-binary "tool/bin/st-luac:tool/bin" \
+  --hidden-import PIL \
+  --hidden-import PIL.Image \
+  --hidden-import PIL.ImageOps \
+  main.py
+```
+
 ### 基本用法
 
 ```bash
