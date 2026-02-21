@@ -4,6 +4,7 @@ from src.xhcart_core.utils.io import atomic_write
 from src.xhcart_core.utils.align import align_to
 from src.xhcart_core.utils.hashing import calculate_crc32
 from src.xhcart_core.format.xhgc.addr_table import AddrTable
+import struct
 
 class BuildData:
     """
@@ -37,9 +38,9 @@ class BuildData:
         # 提取header数据
         header_data = bytearray(cart_data[:self.HEADER_SIZE])
 
-        # 收集所有文件信息
-        index_entries = []
+        # 构建DATA区数据
         data_content = bytearray()
+        index_entries = []
 
         # 处理LUA和RES chunks
         for chunk in self.pack_spec.chunks:
@@ -56,9 +57,14 @@ class BuildData:
             strip_prefix = chunk.get('strip_prefix', '')
             name_prefix = chunk.get('name_prefix', '')
             exclude_patterns = chunk.get('exclude', [])
+            order = chunk.get('order', 'lex')
 
             # 查找匹配的文件
             files = self._find_files(glob_pattern, exclude_patterns)
+
+            # 排序文件
+            if order == 'lex':
+                files.sort()
 
             # 处理每个文件
             for file_path in files:
@@ -90,7 +96,7 @@ class BuildData:
         data_size = len(data_content)
         data_crc32 = calculate_crc32(data_content) if data_size > 0 else 0
 
-        # 构建INDEX表
+        # 构建INDEX表（slot4）
         index_content = self.build_index(index_entries, data_content)
 
         # 计算INDEX大小和CRC32
@@ -151,19 +157,23 @@ class BuildData:
         # 原子写入文件
         atomic_write(out_path, cart_data)
 
-        print(f"Successfully built cart.bin with data: {out_path}")
-        print(f"File size: {len(cart_data)} bytes")
-        print(f"Header size: {len(header_data_with_crc)} bytes")
-        print(f"Index offset: {index_offset} bytes (0x{index_offset:08X})")
-        print(f"Index size: {index_size} bytes (0x{index_size:08X})")
-        print(f"Index CRC32: 0x{index_crc32:08X}")
-        print(f"Data offset: {data_offset} bytes (0x{data_offset:08X})")
-        print(f"Data size: {data_size} bytes (0x{data_size:08X})")
-        print(f"Data CRC32: 0x{data_crc32:08X}")
-        print(f"Padding size: {len(padding)} bytes")
-        print(f"Header CRC32 enabled: {header_crc32}")
-        print(f"Image CRC32 enabled: {image_crc32}")
-        print(f"Files in data: {len(index_entries)}")
+        # 输出JSON格式结果
+        import json, sys
+        result = {
+            "step": "data",
+            "status": "ok",
+            "file_size": len(cart_data),
+            "index_offset": index_offset,
+            "index_size": index_size,
+            "index_crc32": f"0x{index_crc32:08X}",
+            "data_offset": data_offset,
+            "data_size": data_size,
+            "data_crc32": f"0x{data_crc32:08X}",
+            "padding_size": len(padding),
+            "files_in_data": len(index_entries)
+        }
+        print(json.dumps(result))
+        sys.stdout.flush()
 
     def build_index(self, index_entries, data_content):
         """

@@ -5,11 +5,22 @@
   "meta": {
     "title": "Hatsune Miku",
     "title_zh": "演示游戏",
-    "publisher": "Nixie Studio",
+    "publisher": "ExMikuPro Studio",
     "version": "0.1.0",
     "cart_id": "0x0123456789ABCDEF",
     "entry": "app/main.lua",
-    "min_fw": "0.8.0"
+    "min_fw": "0.8.0",
+    "id": "com.exmikupro.studio.hatsune-miku",
+    "description": {
+      "default": "A demo game featuring Hatsune Miku",
+      "zh-CN": "一个以初音未来为主题的演示游戏"
+    },
+    "category": "game",
+    "tags": ["demo", "game", "hatsune-miku"],
+    "author": {
+      "name": "ExMikuPro Studio",
+      "contact": "contact@miku.studio"
+    }
   },
 
   "icon": {

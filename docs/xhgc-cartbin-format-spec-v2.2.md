@@ -164,36 +164,91 @@ typedef struct __attribute__((packed)) {
 ### 7.2 MANF（slot2）
 
 - 来源：pack.json `chunks` 中 `type = "MANF"` 且 `source = "inline_meta"` 的条目，由打包器从 `meta` 字段自动生成。
-- 格式：**UTF-8 JSON**，无 BOM，不保证 pretty-print（打包器可压缩输出）。
-- 内容：`meta` 下所有字段的完整导出（包括 `id`、`description`、`category`、`tags`、`author` 等 v1.1 新增字段）。
-- 大小：变长，由实际 JSON 内容决定。
-- 段内无额外 framing，解析端按地址表 `size` 字段读取后直接解析 JSON。
+- 格式：**自定义二进制格式**（带偏移表），解析端直接按 field_id 查表读取，无需 JSON 解析器。
+- 大小：变长，由实际字段内容决定。
+- 只写入有值的字段，空字段跳过。
 
 > Header 里的 `title` / `entry` 等字段是为**快速读取**而设的定长副本，MANF 是完整结构化元数据，两者内容必须一致。
 
-**MANF JSON 示例（由打包器生成）：**
+**结构体定义：**
 
-```json
-{
-  "title": "Hatsune Miku",
-  "title_zh": "演示游戏",
-  "publisher": "Nixie Studio",
-  "version": "0.1.0",
-  "cart_id": "0x0123456789ABCDEF",
-  "entry": "app/main.lua",
-  "min_fw": "0.8.0",
-  "id": "com.nixie.studio.hatsune-miku",
-  "description": {
-    "default": "A demo game featuring Hatsune Miku",
-    "zh-CN": "一个以初音未来为主题的演示游戏"
-  },
-  "category": "game",
-  "tags": ["demo", "game", "hatsune-miku"],
-  "author": {
-    "name": "Nixie Studio",
-    "contact": "contact@nixie.studio"
-  }
-}
+```c
+// MANF Header（固定 16 bytes）
+typedef struct __attribute__((packed)) {
+    uint32_t magic;        // 固定 0x464E414D ("MANF")
+    uint32_t version;      // 固定 1
+    uint32_t total_size;   // 整个 MANF 段字节数
+    uint32_t field_count;  // 字段数量
+} XhgcManfHeader;
+
+// 偏移表条目（每条 8 bytes，紧跟 Header 后）
+typedef struct __attribute__((packed)) {
+    uint8_t  field_id;     // 字段 ID（见下表）
+    uint8_t  reserved[3];  // 填 0
+    uint32_t offset;       // 相对 MANF 段起点的字节偏移
+} XhgcManfFieldEntry;
+
+// 字段数据（变长，紧跟偏移表后）
+typedef struct __attribute__((packed)) {
+    uint16_t size;         // 数据长度 bytes
+    // 紧跟 size bytes 的实际数据
+} XhgcManfField;
+```
+
+**字段 ID 表：**
+
+| field_id | 字段 | 类型 |
+|---|---|---|
+| `0x01` | title | UTF-8 字符串 |
+| `0x02` | title_zh | UTF-8 字符串 |
+| `0x03` | publisher | UTF-8 字符串 |
+| `0x04` | version | UTF-8 字符串 |
+| `0x05` | cart_id | u64 little-endian |
+| `0x06` | entry | UTF-8 字符串 |
+| `0x07` | min_fw | UTF-8 字符串 |
+| `0x08` | id | UTF-8 字符串 |
+| `0x09` | description_default | UTF-8 字符串 |
+| `0x0A` | description_zh | UTF-8 字符串 |
+| `0x0B` | category | UTF-8 字符串 |
+| `0x0C` | tags | UTF-8 字符串，多个 tag 用 `\n` 分隔 |
+| `0x0D` | author_name | UTF-8 字符串 |
+| `0x0E` | author_contact | UTF-8 字符串 |
+
+**内存布局：**
+
+```
+[ XhgcManfHeader (16B)              ]
+[ XhgcManfFieldEntry #0 (8B)        ]
+[ XhgcManfFieldEntry #1 (8B)        ]
+...
+[ XhgcManfFieldEntry #N-1 (8B)      ]
+[ XhgcManfField #0: size(2B) + data ]
+[ XhgcManfField #1: size(2B) + data ]
+...
+```
+
+**实际验证示例（14 个字段，388 bytes）：**
+
+```
+magic       = 0x464E414D ("MANF")
+version     = 1
+total_size  = 388
+field_count = 14
+
+[0x01] title              = "Hatsune Miku"
+[0x02] title_zh           = "演示游戏"
+[0x03] publisher          = "Nixie Studio"
+[0x04] version            = "0.1.0"
+[0x05] cart_id            = 0x0123456789ABCDEF
+[0x06] entry              = "app/main.lua"
+[0x07] min_fw             = "0.8.0"
+[0x08] id                 = "com.nixie.studio.hatsune-miku"
+[0x09] description_default= "A demo game featuring Hatsune Miku"
+[0x0A] description_zh     = "一个以初音未来为主题的演示游戏"
+[0x0B] category           = "game"
+[0x0C] tags               = "demo\ngame\nhatsune-miku"
+[0x0D] author_name        = "Nixie Studio"
+[0x0E] author_contact     = "contact@nixie.studio"
 ```
 
 ### 7.3 INDEX（slot4）
@@ -339,4 +394,4 @@ Entry[1]:
 | 版本 | 日期 | 变更摘要 |
 |---|---|---|
 | v2.1 | - | 修订 ICON 段为 ARGB8888（200×200，160000B） |
-| v2.2 | 2026-02-21 | 补全 slot2(MANF) / slot4(INDEX) / slot5(DATA) 格式定义；补充完整镜像布局表；新增 INDEX 结构体定义及实际验证示例；明确 INDEX data_offset 为相对 DATA 段起点的偏移；新增文件读取流程；新增 pack.json → bin 对应关系速查；更新槽位说明与 pack.json 字段对应 |
+| v2.2 | 2026-02-21 | 补全 slot2(MANF) / slot4(INDEX) / slot5(DATA) 格式定义；MANF 改为自定义二进制格式（带偏移表，field_id 查表，无需 JSON 解析器）；补充完整镜像布局表；新增 INDEX 结构体定义及实际验证示例；明确 INDEX data_offset 为相对 DATA 段起点的偏移；新增文件读取流程；新增 pack.json → bin 对应关系速查；更新槽位说明与 pack.json 字段对应 |

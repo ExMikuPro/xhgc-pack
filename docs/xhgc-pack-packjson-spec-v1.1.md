@@ -94,12 +94,78 @@
 
 | chunk type | 写入 bin slot | 说明 |
 |---|---|---|
-| `MANF` | slot2 (MANF) | manifest JSON，由 `inline_meta` 从 meta 字段生成 |
+| `MANF` | slot2 (MANF) | manifest 二进制，由 `inline_meta` 从 meta 字段生成 |
 | `LUA` | slot5 (DATA) | Lua 脚本数据块 |
 | `RES` | slot5 (DATA) | 资源文件数据块（与 LUA 合并写入 DATA 区） |
 
 > `MANF` **建议排在 `chunks` 列表第一位**，以保证 bin 中 manifest 优先写入，便于固件端快速读取元信息。  
 > INDEX（slot4）由打包器根据 DATA 区内容自动生成，**不需要**在 `pack.json` 中声明。
+
+### 3.1 MANF 二进制格式
+
+MANF 不使用 JSON，采用带偏移表的自定义二进制格式，解析端直接按 field_id 查表读取，无需 JSON 解析器。
+
+**结构体定义：**
+
+```c
+// MANF Header（固定 16 bytes）
+typedef struct __attribute__((packed)) {
+    uint32_t magic;        // 固定 0x464E414D ("MANF")
+    uint32_t version;      // 固定 1
+    uint32_t total_size;   // 整个 MANF 段字节数
+    uint32_t field_count;  // 字段数量（只写入有值的字段）
+} XhgcManfHeader;
+
+// 偏移表条目（每条 8 bytes，紧跟 Header 后）
+typedef struct __attribute__((packed)) {
+    uint8_t  field_id;     // 字段 ID（见下表）
+    uint8_t  reserved[3];  // 填 0
+    uint32_t offset;       // 相对 MANF 段起点的字节偏移
+} XhgcManfFieldEntry;
+
+// 字段数据（变长，紧跟偏移表后）
+typedef struct __attribute__((packed)) {
+    uint16_t size;         // 数据长度 bytes
+    // 紧跟 size bytes 的实际数据（UTF-8 字符串或二进制）
+} XhgcManfField;
+```
+
+**字段 ID 表：**
+
+| field_id | 字段 | 类型 | 对应 meta 字段 |
+|---|---|---|---|
+| `0x01` | title | UTF-8 字符串 | `meta.title` |
+| `0x02` | title_zh | UTF-8 字符串 | `meta.title_zh` |
+| `0x03` | publisher | UTF-8 字符串 | `meta.publisher` |
+| `0x04` | version | UTF-8 字符串 | `meta.version` |
+| `0x05` | cart_id | u64 little-endian | `meta.cart_id`（字符串转 u64） |
+| `0x06` | entry | UTF-8 字符串 | `meta.entry` |
+| `0x07` | min_fw | UTF-8 字符串 | `meta.min_fw` |
+| `0x08` | id | UTF-8 字符串 | `meta.id` |
+| `0x09` | description_default | UTF-8 字符串 | `meta.description.default` |
+| `0x0A` | description_zh | UTF-8 字符串 | `meta.description["zh-CN"]` |
+| `0x0B` | category | UTF-8 字符串 | `meta.category` |
+| `0x0C` | tags | UTF-8 字符串，多个 tag 用 `\n` 分隔 | `meta.tags` |
+| `0x0D` | author_name | UTF-8 字符串 | `meta.author.name` |
+| `0x0E` | author_contact | UTF-8 字符串 | `meta.author.contact` |
+
+**内存布局：**
+
+```
+[ XhgcManfHeader (16B)              ]
+[ XhgcManfFieldEntry #0 (8B)        ]
+[ XhgcManfFieldEntry #1 (8B)        ]
+...
+[ XhgcManfFieldEntry #N-1 (8B)      ]
+[ XhgcManfField #0: size(2B) + data ]
+[ XhgcManfField #1: size(2B) + data ]
+...
+```
+
+**打包规则：**
+- 只写入有值的字段，空字段跳过
+- `cart_id` 字符串（如 `"0x0123456789ABCDEF"`）转换为 little-endian u64 写入
+- 偏移表中的 `offset` 是相对 MANF 段起点的字节偏移
 
 ---
 
@@ -222,4 +288,4 @@
 | 版本 | 日期 | 变更摘要 |
 |---|---|---|
 | v1.0 | - | 初始版本 |
-| v1.1 | 2026-02-21 | 移除 `icons` 多变体容器，`icon` 升为正式唯一图标字段并锁定 200×200；新增 `build` 对象；新增 chunk `strip_prefix` / `exclude` / `order`；新增 chunk type → bin slot 映射表；新增错误等级表；补全 meta 字段与 bin Header 长度约束对齐；规范 `cart_id` 转换规则；规范 `alignment_bytes` 合法值约束 |
+| v1.1 | 2026-02-21 | 移除 `icons` 多变体容器，`icon` 升为正式唯一图标字段并锁定 200×200；新增 `build` 对象；新增 chunk `strip_prefix` / `exclude` / `order`；新增 chunk type → bin slot 映射表；新增 MANF 二进制格式定义（字段 ID 表、结构体、内存布局）；新增错误等级表；补全 meta 字段与 bin Header 长度约束对齐；规范 `cart_id` 转换规则；规范 `alignment_bytes` 合法值约束 |

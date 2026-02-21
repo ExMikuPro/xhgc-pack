@@ -2,6 +2,7 @@ from src.xhcart_core.config.load import load_pack_json
 from src.xhcart_core.format.xhgc.header import HeaderV2
 from src.xhcart_core.utils.io import atomic_write
 from src.xhcart_core.pipeline.build_icon import BuildIcon
+from src.xhcart_core.pipeline.build_manf import BuildManf
 from src.xhcart_core.pipeline.build_entry import BuildEntry
 from src.xhcart_core.pipeline.build_data import BuildData
 
@@ -55,11 +56,15 @@ def pack_header_icon(pack_json: str, out_path: str) -> None:
     builder = BuildIcon(pack_spec)
     builder.build(out_path)
 
-    # 创建BuildEntry对象并构建（先构建Lua脚本）
+    # 创建BuildManf对象并构建
+    manf_builder = BuildManf(pack_spec)
+    manf_builder.build(out_path)
+
+    # 创建BuildEntry对象并构建
     entry_builder = BuildEntry(pack_spec)
     entry_builder.build(out_path)
 
-    # 创建BuildData对象并构建（后构建资源文件）
+    # 创建BuildData对象并构建
     data_builder = BuildData(pack_spec)
     data_builder.build(out_path)
 
