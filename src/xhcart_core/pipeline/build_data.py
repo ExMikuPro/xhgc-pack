@@ -1,9 +1,9 @@
 from pathlib import Path
-from src.xhcart_core.config.pack_spec import PackSpec
-from src.xhcart_core.utils.io import atomic_write
-from src.xhcart_core.utils.align import align_to
-from src.xhcart_core.utils.hashing import calculate_crc32
-from src.xhcart_core.format.xhgc.addr_table import AddrTable
+from xhcart_core.config.pack_spec import PackSpec
+from xhcart_core.utils.io import atomic_write
+from xhcart_core.utils.align import align_to
+from xhcart_core.utils.hashing import calculate_crc32
+from xhcart_core.format.xhgc.addr_table import AddrTable
 import struct
 
 class BuildData:
@@ -81,6 +81,7 @@ class BuildData:
                 # 计算文件大小和CRC32
                 file_size = len(file_content)
                 file_crc32 = calculate_crc32(file_content)
+                file_offset = len(data_content)
 
                 # 添加到DATA区
                 data_content.extend(file_content)
@@ -88,6 +89,7 @@ class BuildData:
                 # 记录索引条目
                 index_entries.append({
                     'path': pack_path,
+                    'offset': file_offset,
                     'size': file_size,
                     'crc32': file_crc32
                 })
@@ -97,7 +99,7 @@ class BuildData:
         data_crc32 = calculate_crc32(data_content) if data_size > 0 else 0
 
         # 构建INDEX表（slot4）
-        index_content = self.build_index(index_entries, data_content)
+        index_content = self.build_index(index_entries)
 
         # 计算INDEX大小和CRC32
         index_size = len(index_content)
@@ -108,6 +110,8 @@ class BuildData:
 
         # 计算DATA偏移量（4KB对齐，在INDEX之后）
         data_offset = align_to(index_offset + index_size, self.ALIGN_SIZE)
+        index_padding_size = data_offset - (index_offset + index_size)
+        index_padding = b'\x00' * index_padding_size
 
         # 写入slot4 (INDEX)
         AddrTable.write_slot(header_data, AddrTable.SLOT_INDEX, index_offset, index_size, index_crc32)
@@ -134,25 +138,40 @@ class BuildData:
             header_data_with_crc = self.calculate_and_write_header_crc(header_data)
         else:
             header_data_with_crc = header_data
+        existing_payload = cart_data[self.HEADER_SIZE:]
 
         # 组装完整数据（包含更新后的header）- 顺序：INDEX在DATA之前
-        cart_data = header_data_with_crc + cart_data[self.HEADER_SIZE:] + index_content + data_content + padding
+        cart_data = (
+            header_data_with_crc
+            + existing_payload
+            + index_content
+            + index_padding
+            + data_content
+            + padding
+        )
 
         # 如果需要计算整个镜像的CRC32
         if image_crc32:
             # 计算整个镜像的CRC32
             image_crc = calculate_crc32(cart_data)
 
-            # 创建新的header副本，写入镜像CRC32到slot6
+            # 创建新的header副本，写入镜像CRC32到slot14
             final_header_data = header_data_with_crc.copy()
-            AddrTable.write_slot(final_header_data, 6, 0, len(cart_data), image_crc)
+            AddrTable.write_slot(final_header_data, AddrTable.SLOT_IMAGE_CRC, 0, len(cart_data), image_crc)
 
             # 再次计算Header CRC32（因为修改了slot6）
             if header_crc32:
                 final_header_data = self.calculate_and_write_header_crc(final_header_data)
 
             # 最终组装数据
-            cart_data = final_header_data + cart_data[self.HEADER_SIZE:] + index_content + data_content + padding
+            cart_data = (
+                final_header_data
+                + existing_payload
+                + index_content
+                + index_padding
+                + data_content
+                + padding
+            )
 
         # 原子写入文件
         atomic_write(out_path, cart_data)
@@ -169,19 +188,19 @@ class BuildData:
             "data_offset": data_offset,
             "data_size": data_size,
             "data_crc32": f"0x{data_crc32:08X}",
+            "index_padding_size": index_padding_size,
             "padding_size": len(padding),
             "files_in_data": len(index_entries)
         }
         print(json.dumps(result))
         sys.stdout.flush()
 
-    def build_index(self, index_entries, data_content):
+    def build_index(self, index_entries):
         """
         构建INDEX表
 
         Args:
             index_entries (list): 索引条目列表
-            data_content (bytearray): DATA区内容
 
         Returns:
             bytearray: INDEX表内容
@@ -200,20 +219,14 @@ class BuildData:
         index_content.extend(struct.pack('<I', entry_count))  # entry_count
         index_content.extend(struct.pack('<I', reserved))     # reserved
 
-        # 计算每个文件在DATA段中的偏移
-        current_offset = 0
-        for entry in index_entries:
-            # 更新偏移量（相对DATA段起点）
-            entry['offset'] = current_offset
-            current_offset += entry['size']
-
         # 写入每个Entry
         for entry in index_entries:
             # 写入16字节定长头
             data_offset = entry['offset']
             data_size = entry['size']
             crc32 = entry['crc32']
-            name_len = len(entry['path'])
+            path_bytes = entry['path'].encode('utf-8')
+            name_len = len(path_bytes)
 
             # 确保路径长度不超过255
             if name_len > 255:
@@ -233,7 +246,7 @@ class BuildData:
             index_content.extend(header)
 
             # 写入变长路径（UTF-8，不含\0）
-            index_content.extend(entry['path'].encode('utf-8'))
+            index_content.extend(path_bytes)
 
         return index_content
 
@@ -305,7 +318,7 @@ class BuildData:
             bytearray: 包含CRC32的header数据
         """
         import struct
-        from src.xhcart_core.format.xhgc.header import HeaderV2
+        from xhcart_core.format.xhgc.header import HeaderV2
 
         # 确保输入数据长度为4096
         if len(header_bytes) != 4096:

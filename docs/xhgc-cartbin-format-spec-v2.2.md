@@ -116,7 +116,8 @@ typedef struct __attribute__((packed)) {
 | 6 | `0x0F60` | BNR | banner（可选） |
 | 7 | `0x0F70` | COVR | cover（可选） |
 | 8 | `0x0F80` | TITLE_A8 | 应用名 A8 mask（可选） |
-| 9..14 | `0x0F90..0x0FE0` | RESV | 预留 |
+| 9..13 | `0x0F90..0x0FD0` | RESV | 预留 |
+| 14 | `0x0FE0` | IMAGE_CRC | 整镜像 CRC32（可选，对应 pack.json `hash.image_crc32`） |
 
 ### 5.3 未使用槽位填写规则
 
@@ -147,6 +148,12 @@ typedef struct __attribute__((packed)) {
 - 地址表每槽里的 `crc32` 字段可用于保存该段的 CRC32/IEEE。
 - 当前未启用时 **必须（MUST）** 填 0。
 - 对应 pack.json `hash.per_chunk_crc32 = true` 时打包器写入。
+
+### 6.3 整镜像 CRC（可选）
+
+- 对应 pack.json `hash.image_crc32 = true`。
+- 写入 slot14 (IMAGE_CRC)：`offset = 0`，`size = cart.bin 文件大小`，`crc32 = 整镜像 CRC32/IEEE`。
+- 未启用时 slot14 填 0。
 
 ---
 

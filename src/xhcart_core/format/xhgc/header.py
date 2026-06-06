@@ -1,6 +1,6 @@
 import struct
 from typing import Dict, Optional
-from src.xhcart_core.config.pack_spec import PackSpec
+from xhcart_core.config.pack_spec import PackSpec
 
 class HeaderV2:
     """
@@ -41,6 +41,7 @@ class HeaderV2:
     SLOT_ENTRY = 3
     SLOT_INDEX = 4
     SLOT_DATA = 5
+    SLOT_IMAGE_CRC = 14
     
     # 兼容性别名
     OFFSET_ADDR_TABLE = ADDR_TABLE_BASE
@@ -162,7 +163,7 @@ class HeaderV2:
         struct.pack_into('<I', header, self.CRC_OFFSET, 0)
         
         # 计算CRC32
-        from src.xhcart_core.utils.hashing import calculate_crc32
+        from xhcart_core.utils.hashing import calculate_crc32
         crc_value = calculate_crc32(header)
         
         # 写入CRC32
@@ -291,7 +292,11 @@ class HeaderV2:
         
         # 解析地址表
         addr_table = []
-        slot_names = ['ICON', 'THMB', 'MANF', 'ENTRY', 'INDEX', 'DATA']
+        slot_names = [
+            'ICON', 'THMB', 'MANF', 'ENTRY', 'INDEX', 'DATA',
+            'BNR', 'COVR', 'TITLE_A8', 'RESV9', 'RESV10',
+            'RESV11', 'RESV12', 'RESV13', 'IMAGE_CRC'
+        ]
         
         for i in range(self.SLOT_COUNT):
             slot_off = self.slot_offset(i)

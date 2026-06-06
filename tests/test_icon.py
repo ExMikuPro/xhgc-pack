@@ -2,8 +2,10 @@ import tempfile
 import os
 import json
 import hashlib
-from src.xhcart_core.api import pack_header_icon, inspect_header
-from src.xhcart_core.domain.errors import ConfigError
+import copy
+from PIL import Image
+from xhcart_core.api import pack_header_icon, inspect_header
+from xhcart_core.utils.align import align_to
 
 class TestIcon:
     """
@@ -18,9 +20,12 @@ class TestIcon:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.pack_json_path = os.path.join(self.temp_dir.name, 'pack.json')
         self.cart_bin_path = os.path.join(self.temp_dir.name, 'cart.bin')
+        self.create_test_lua()
         
         # 创建基础的pack.json
         self.base_pack_json = {
+            "format": "XHGC_PACK",
+            "pack_version": 1,
             "meta": {
                 "title": "Demo Game",
                 "title_zh": "演示游戏",
@@ -31,23 +36,33 @@ class TestIcon:
                 "min_fw": "0.8.0"
             },
             "icon": {
-                "path": "icon.rgb888",
-                "format": "RGB888",
+                "path": "icon.png",
+                "format": "ARGB8888",
                 "width": 200,
-                "height": 200
+                "height": 200,
+                "preprocess": {
+                    "mode": "contain",
+                    "background": "#000000",
+                    "resample": "lanczos"
+                }
             },
             "build": {
                 "output": "build/demo_game.cart.bin",
                 "header_size": 4096,
-                "align": 4096
-            }
+                "alignment_bytes": 4096
+            },
+            "chunks": [
+                {
+                    "type": "LUA",
+                    "glob": "script/main.lua",
+                    "strip_prefix": "script/",
+                    "name_prefix": "app/",
+                    "compress": "none",
+                    "exclude": ["**/.DS_Store"],
+                    "order": "lex"
+                }
+            ]
         }
-    
-    def teardown_method(self):
-        """
-        测试后的清理
-        """
-        self.temp_dir.cleanup()
     
     def write_pack_json(self, data):
         """
@@ -56,22 +71,29 @@ class TestIcon:
         with open(self.pack_json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f)
     
-    def create_test_raw_icon(self, path):
+    def create_test_lua(self):
         """
-        创建测试用的raw icon文件
+        创建完整打包流水线需要的Lua入口。
         """
-        # 200x200 RGB888 = 120000 bytes
-        icon_data = b'\x00' * 120000
-        with open(path, 'wb') as f:
-            f.write(icon_data)
+        script_dir = os.path.join(self.temp_dir.name, 'script')
+        os.makedirs(script_dir, exist_ok=True)
+        with open(os.path.join(script_dir, 'main.lua'), 'w', encoding='utf-8') as f:
+            f.write("print('hello xhgc')\n")
+
+    def create_test_icon(self, path):
+        """
+        创建测试用的PNG icon文件。
+        """
+        img = Image.new('RGBA', (200, 200), (0, 128, 255, 255))
+        img.save(path)
     
-    def test_raw_icon(self):
+    def test_png_icon(self):
         """
-        测试输入raw icon (120000 bytes) -> 输出文件大小正确（pad 到 4096）
+        测试输入PNG icon -> 输出文件大小正确（pad 到 4096）
         """
-        # 创建测试用的raw icon
-        icon_path = os.path.join(self.temp_dir.name, 'icon.rgb888')
-        self.create_test_raw_icon(icon_path)
+        # 创建测试用的PNG icon
+        icon_path = os.path.join(self.temp_dir.name, 'icon.png')
+        self.create_test_icon(icon_path)
         
         # 写入pack.json
         self.write_pack_json(self.base_pack_json)
@@ -82,15 +104,15 @@ class TestIcon:
         # 检查文件大小
         file_size = os.path.getsize(self.cart_bin_path)
         assert file_size % 4096 == 0, f"File size should be aligned to 4096, got {file_size}"
-        assert file_size >= 4096 + 120000, f"File size should be at least 4096 + 120000, got {file_size}"
+        assert file_size >= 4096 + 160000, f"File size should be at least 4096 + 160000, got {file_size}"
     
     def test_icon_slot(self):
         """
-        测试slot0 ICON offset==4096, size==120000, crc32==0
+        测试slot0 ICON offset==4096, size==160000, crc32==0
         """
-        # 创建测试用的raw icon
-        icon_path = os.path.join(self.temp_dir.name, 'icon.rgb888')
-        self.create_test_raw_icon(icon_path)
+        # 创建测试用的PNG icon
+        icon_path = os.path.join(self.temp_dir.name, 'icon.png')
+        self.create_test_icon(icon_path)
         
         # 写入pack.json
         self.write_pack_json(self.base_pack_json)
@@ -108,7 +130,7 @@ class TestIcon:
         
         assert icon_slot is not None, "ICON slot not found"
         assert icon_slot['data_offset'] == 4096, f"ICON offset should be 4096, got {icon_slot['data_offset']}"
-        assert icon_slot['size'] == 120000, f"ICON size should be 120000, got {icon_slot['size']}"
+        assert icon_slot['size'] == 160000, f"ICON size should be 160000, got {icon_slot['size']}"
         assert icon_slot['crc32'] == 0, f"ICON crc32 should be 0, got {icon_slot['crc32']}"
     
     def test_icon_not_found(self):
@@ -116,8 +138,8 @@ class TestIcon:
         测试icon文件不存在 -> 抛错误
         """
         # 写入pack.json（引用不存在的icon文件）
-        pack_json = self.base_pack_json.copy()
-        pack_json['icon']['path'] = 'non_existent.rgb888'
+        pack_json = copy.deepcopy(self.base_pack_json)
+        pack_json['icon']['path'] = 'non_existent.png'
         self.write_pack_json(pack_json)
         
         try:
@@ -128,29 +150,30 @@ class TestIcon:
     
     def test_icon_invalid_size(self):
         """
-        测试icon文件尺寸不对 -> 抛错误
+        测试icon配置尺寸不对 -> 抛错误
         """
-        # 创建尺寸不对的raw icon（小于120000 bytes）
-        icon_path = os.path.join(self.temp_dir.name, 'icon.rgb888')
-        with open(icon_path, 'wb') as f:
-            f.write(b'\x00' * 100000)  # 只有100000 bytes
+        # 创建测试用的PNG icon
+        icon_path = os.path.join(self.temp_dir.name, 'icon.png')
+        self.create_test_icon(icon_path)
         
         # 写入pack.json
-        self.write_pack_json(self.base_pack_json)
+        pack_json = copy.deepcopy(self.base_pack_json)
+        pack_json['icon']['width'] = 128
+        self.write_pack_json(pack_json)
         
         try:
             pack_header_icon(self.pack_json_path, self.cart_bin_path)
             assert False, "Should raise error for invalid icon size"
         except Exception as e:
-            assert "invalid" in str(e)
+            assert "icon.width must be 200" in str(e)
     
     def test_deterministic(self):
         """
         测试deterministic：同一个输入图片与pack.json生成的输出一致
         """
-        # 创建测试用的raw icon
-        icon_path = os.path.join(self.temp_dir.name, 'icon.rgb888')
-        self.create_test_raw_icon(icon_path)
+        # 创建测试用的PNG icon
+        icon_path = os.path.join(self.temp_dir.name, 'icon.png')
+        self.create_test_icon(icon_path)
         
         # 写入pack.json
         self.write_pack_json(self.base_pack_json)
@@ -169,6 +192,44 @@ class TestIcon:
             hash2 = hashlib.sha256(f2.read()).hexdigest()
         
         assert hash1 == hash2, "Output should be deterministic"
+
+    def test_image_crc_uses_slot14_without_duplicating_segments(self):
+        """
+        测试整镜像CRC写入slot14，且不会重复追加已有段。
+        """
+        icon_path = os.path.join(self.temp_dir.name, 'icon.png')
+        self.create_test_icon(icon_path)
+
+        pack_json = copy.deepcopy(self.base_pack_json)
+        pack_json['hash'] = {
+            'header_crc32': True,
+            'image_crc32': True,
+            'per_chunk_crc32': False,
+            'per_file_crc32': False,
+        }
+        self.write_pack_json(pack_json)
+
+        pack_header_icon(self.pack_json_path, self.cart_bin_path)
+        info = inspect_header(self.cart_bin_path)
+        slots = {slot['name']: slot for slot in info['addr_table']}
+        file_size = os.path.getsize(self.cart_bin_path)
+
+        assert slots['MANF']['data_offset'] == align_to(
+            slots['ICON']['data_offset'] + slots['ICON']['size'], 4096
+        )
+        assert slots['ENTRY']['data_offset'] == align_to(
+            slots['MANF']['data_offset'] + slots['MANF']['size'], 4096
+        )
+        assert slots['INDEX']['data_offset'] == align_to(
+            slots['ENTRY']['data_offset'] + slots['ENTRY']['size'], 4096
+        )
+        assert slots['DATA']['data_offset'] == align_to(
+            slots['INDEX']['data_offset'] + slots['INDEX']['size'], 4096
+        )
+        assert file_size == align_to(slots['DATA']['data_offset'] + slots['DATA']['size'], 4096)
+        assert slots['IMAGE_CRC']['data_offset'] == 0
+        assert slots['IMAGE_CRC']['size'] == file_size
+        assert slots['IMAGE_CRC']['crc32'] != 0
     
     def teardown_method(self):
         """

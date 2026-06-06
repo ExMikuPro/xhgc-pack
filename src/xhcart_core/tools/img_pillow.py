@@ -1,20 +1,26 @@
 from PIL import Image, ImageOps
 from pathlib import Path
 
-def _hex_to_rgb(hex_color: str) -> tuple:
+def _hex_to_rgba(hex_color: str) -> tuple:
     """
-    将十六进制颜色转换为RGB元组
+    将十六进制颜色转换为RGBA元组
 
     Args:
-        hex_color (str): 十六进制颜色字符串，如'#FF0000'
+        hex_color (str): 十六进制颜色字符串，如'#FF0000'或'#FFFF0000'
 
     Returns:
-        tuple: RGB元组
+        tuple: RGBA元组
     """
     hex_color = hex_color.lstrip('#')
     if len(hex_color) == 3:
         hex_color = ''.join([c*2 for c in hex_color])
-    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    if len(hex_color) == 6:
+        r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        return r, g, b, 255
+    if len(hex_color) == 8:
+        a, r, g, b = (int(hex_color[i:i+2], 16) for i in (0, 2, 4, 6))
+        return r, g, b, a
+    raise ValueError(f"Invalid hex color: #{hex_color}")
 
 def process_image(image_path: Path, width: int, height: int, mode: str = 'cover', background: str = '#000000', resample: str = 'lanczos') -> bytes:
     """
@@ -66,7 +72,7 @@ def process_image(image_path: Path, width: int, height: int, mode: str = 'cover'
                 img.thumbnail((width, height), resample_method)
 
             # 创建背景画布（RGBA模式）
-            bg_color = _hex_to_rgb(background) + (255,)  # 添加完全不透明的alpha值
+            bg_color = _hex_to_rgba(background)
             bg = Image.new('RGBA', (width, height), bg_color)
 
             # 计算居中位置
@@ -83,16 +89,13 @@ def process_image(image_path: Path, width: int, height: int, mode: str = 'cover'
         if img.width != width or img.height != height:
             raise ValueError(f"Image resizing failed: expected {width}x{height}, got {img.width}x{img.height}")
 
-        # 转换为BGRA字节序的ARGB8888 raw格式
-        # 注意：Pillow的RGBA格式是RGBA顺序，我们需要转换为BGRA顺序
-        # 并确保每个32位像素的字节序正确（小端）
+        # 转换为ARGB8888 raw格式，按A,R,G,B字节顺序写出
         raw_data = bytearray()
         pixels = img.load()
         for y in range(height):
             for x in range(width):
                 r, g, b, a = pixels[x, y]
-                # 转换为BGRA顺序
-                raw_data.extend(bytes([b, g, r, a]))
+                raw_data.extend(bytes([a, r, g, b]))
 
         # 验证数据长度
         expected_length = width * height * 4

@@ -1,5 +1,5 @@
 import argparse
-from src.xhcart_core.api import pack_header_icon
+from xhcart_core.api import pack_header_icon
 
 def main():
     """

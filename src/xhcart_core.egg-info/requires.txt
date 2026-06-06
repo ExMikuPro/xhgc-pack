@@ -1,3 +1,7 @@
 
+[dev]
+Pillow>=10
+pytest>=8
+
 [image]
 Pillow>=10

@@ -1,9 +1,9 @@
 from pathlib import Path
-from src.xhcart_core.config.pack_spec import PackSpec
-from src.xhcart_core.utils.io import atomic_write
-from src.xhcart_core.utils.align import align_to
-from src.xhcart_core.tools.img_pillow import process_image
-from src.xhcart_core.utils.hashing import calculate_crc32
+from xhcart_core.config.pack_spec import PackSpec
+from xhcart_core.utils.io import atomic_write
+from xhcart_core.utils.align import align_to
+from xhcart_core.tools.img_pillow import process_image
+from xhcart_core.utils.hashing import calculate_crc32
 
 
 class BuildIcon:
@@ -39,7 +39,7 @@ class BuildIcon:
             bytearray: 包含CRC32的header数据
         """
         import struct
-        from src.xhcart_core.format.xhgc.header import HeaderV2
+        from xhcart_core.format.xhgc.header import HeaderV2
 
         # 确保输入数据长度为4096
         if len(header_bytes) != 4096:
@@ -65,8 +65,8 @@ class BuildIcon:
             out_path (str): 输出文件路径
         """
         # 生成header
-        from src.xhcart_core.format.xhgc.header import HeaderV2
-        from src.xhcart_core.format.xhgc.addr_table import AddrTable
+        from xhcart_core.format.xhgc.header import HeaderV2
+        from xhcart_core.format.xhgc.addr_table import AddrTable
 
         # 创建HeaderV2对象
         header = HeaderV2(self.pack_spec)
@@ -113,7 +113,7 @@ class BuildIcon:
 
             # 创建新的header副本，写入镜像CRC32
             final_header_data = header_data_with_crc.copy()
-            AddrTable.write_slot(final_header_data, 6, 0, len(cart_data), image_crc)
+            AddrTable.write_slot(final_header_data, AddrTable.SLOT_IMAGE_CRC, 0, len(cart_data), image_crc)
 
             # 再次计算Header CRC32（因为修改了slot6）
             final_header_data = self.calculate_and_write_header_crc(final_header_data)
@@ -154,7 +154,7 @@ class BuildIcon:
             cart_path (str): cart.bin文件路径
         """
         import struct
-        from src.xhcart_core.format.xhgc.header import HeaderV2
+        from xhcart_core.format.xhgc.header import HeaderV2
 
         # 读取cart.bin文件
         with open(cart_path, 'rb') as f:
@@ -205,13 +205,14 @@ class BuildIcon:
         icon_config = self.pack_spec.icon
         if not icon_config:
             raise ValueError("icon configuration missing")
+        self._validate_icon_config(icon_config)
 
         icon_path = icon_config.get('path')
         if not icon_path:
             raise ValueError("icon.path missing")
 
         # 解析为绝对路径（相对于pack.json所在目录）
-        from src.xhcart_core.utils.path import resolve_relative_path
+        from xhcart_core.utils.path import resolve_relative_path
         return resolve_relative_path(icon_path, self.pack_spec.pack_json_path)
 
     def _load_and_process_icon(self, icon_path: Path) -> bytes:
@@ -256,3 +257,19 @@ class BuildIcon:
                 f"Processed icon size mismatch: expected {self.ICON_SIZE} bytes, got {len(icon_data)} bytes")
 
         return icon_data
+
+    def _validate_icon_config(self, icon_config: dict) -> None:
+        """
+        校验icon配置是否符合cart.bin固定ICON段约束。
+        """
+        icon_format = icon_config.get('format', 'ARGB8888')
+        if icon_format != 'ARGB8888':
+            raise ValueError(f"icon.format must be ARGB8888, got {icon_format}")
+
+        width = icon_config.get('width', self.ICON_WIDTH)
+        if width != self.ICON_WIDTH:
+            raise ValueError(f"icon.width must be {self.ICON_WIDTH}, got {width}")
+
+        height = icon_config.get('height', self.ICON_HEIGHT)
+        if height != self.ICON_HEIGHT:
+            raise ValueError(f"icon.height must be {self.ICON_HEIGHT}, got {height}")

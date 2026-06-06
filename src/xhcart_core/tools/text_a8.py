@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 from typing import Tuple, Optional, Dict, Any
-from src.xhcart_core.domain.errors import ToolError
+from xhcart_core.domain.errors import ToolError
 
 def render_text_a8(text: str, font_path: str, height_px: int = 20, pad_x: int = 2, trim_x: bool = True, resample: Optional[int] = None) -> Tuple[bytes, int, int, int, float]:
     """
@@ -93,7 +93,7 @@ def _find_optimal_font_size(font_path: Path, target_height: int) -> int:
     low = 1
     high = 100
     best_size = 1
-    best_line_height = float('inf')
+    best_line_height = 0
     
     while low <= high:
         mid = (low + high) // 2

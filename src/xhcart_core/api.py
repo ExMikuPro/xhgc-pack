@@ -1,10 +1,10 @@
-from src.xhcart_core.config.load import load_pack_json
-from src.xhcart_core.format.xhgc.header import HeaderV2
-from src.xhcart_core.utils.io import atomic_write
-from src.xhcart_core.pipeline.build_icon import BuildIcon
-from src.xhcart_core.pipeline.build_manf import BuildManf
-from src.xhcart_core.pipeline.build_entry import BuildEntry
-from src.xhcart_core.pipeline.build_data import BuildData
+from xhcart_core.config.load import load_pack_json
+from xhcart_core.format.xhgc.header import HeaderV2
+from xhcart_core.utils.io import atomic_write
+from xhcart_core.pipeline.build_icon import BuildIcon
+from xhcart_core.pipeline.build_manf import BuildManf
+from xhcart_core.pipeline.build_entry import BuildEntry
+from xhcart_core.pipeline.build_data import BuildData
 
 # 尝试导入Pillow，如果不可用则设置标志
 try:
@@ -79,7 +79,7 @@ def inspect_header(header_path: str) -> dict:
         dict: 字段信息
     """
     with open(header_path, 'rb') as f:
-        header_data = f.read()
+        header_data = f.read(HeaderV2.HEADER_SIZE)
 
     # 创建HeaderV2对象（空配置）
     from .config.pack_spec import PackSpec, MetaSpec, BuildSpec
@@ -108,10 +108,10 @@ def verify_header(header_path: str) -> bool:
         bool: 验证结果
     """
     with open(header_path, 'rb') as f:
-        header_data = f.read()
+        header_data = f.read(HeaderV2.HEADER_SIZE)
 
     # 确保header大小正确
-    if len(header_data) != 4096:
+    if len(header_data) != HeaderV2.HEADER_SIZE:
         return False
 
     # 提取存储的CRC32
@@ -123,7 +123,7 @@ def verify_header(header_path: str) -> bool:
     header_copy[4092:4096] = b'\x00\x00\x00\x00'
 
     # 计算CRC32
-    from src.xhcart_core.utils.hashing import calculate_crc32
+    from xhcart_core.utils.hashing import calculate_crc32
     calculated_crc = calculate_crc32(header_copy)
 
     # 比较CRC32

@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from src.xhcart_core.api import pack_header, pack_header_icon, inspect_header, verify_header
+from xhcart_core.api import pack_header, pack_header_icon, inspect_header, verify_header
 
 def main():
     """
@@ -20,12 +20,12 @@ def main():
     pack_icon_parser.add_argument('-o', '--output', dest='out_path', help='Output cart.bin file path', required=True)
     
     # inspect-header 命令
-    inspect_parser = subparsers.add_parser('inspect-header', help='Inspect header.bin fields')
-    inspect_parser.add_argument('header_path', help='header.bin file path')
+    inspect_parser = subparsers.add_parser('inspect-header', help='Inspect header.bin or cart.bin fields')
+    inspect_parser.add_argument('header_path', help='header.bin or cart.bin file path')
     
     # verify-header 命令
-    verify_parser = subparsers.add_parser('verify-header', help='Verify header.bin CRC32')
-    verify_parser.add_argument('header_path', help='header.bin file path')
+    verify_parser = subparsers.add_parser('verify-header', help='Verify header.bin or cart.bin CRC32')
+    verify_parser.add_argument('header_path', help='header.bin or cart.bin file path')
     
     args = parser.parse_args()
     
@@ -58,10 +58,8 @@ def main():
         print("-" * 80)
         print(f"{'Name':<10} {'Offset':<10} {'Data Offset':<15} {'Size':<10} {'CRC32':<10}")
         print("-" * 80)
-        # 显示所有固定槽位
-        slot_names = ['ICON', 'THMB', 'MANF', 'ENTRY', 'INDEX', 'DATA']
-        for i, slot in enumerate(info['addr_table'][:6]):
-            if i < len(slot_names):
+        for slot in info['addr_table']:
+            if slot['data_offset'] > 0 or slot['size'] > 0 or slot['crc32'] > 0:
                 print(f"{slot['name']:<10} 0x{slot['offset']:04X} 0x{slot['data_offset']:08X} {slot['size']:<10} 0x{slot['crc32']:08X}")
     
     elif args.command == 'verify-header':

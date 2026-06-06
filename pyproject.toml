@@ -18,6 +18,10 @@ requires-python = ">=3.9"
 image = [
     "Pillow>=10"
 ]
+dev = [
+    "Pillow>=10",
+    "pytest>=8"
+]
 
 [build-system]
 requires = ["setuptools", "wheel"]

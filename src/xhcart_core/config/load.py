@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
-from src.xhcart_core.config.pack_spec import PackSpec, MetaSpec, BuildSpec, HashSpec
-from src.xhcart_core.domain.errors import ConfigError
+from xhcart_core.config.pack_spec import PackSpec, MetaSpec, BuildSpec, HashSpec
+from xhcart_core.domain.errors import ConfigError
 
 def load_pack_json(pack_json_path: str) -> PackSpec:
     """

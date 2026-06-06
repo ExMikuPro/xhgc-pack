@@ -3,8 +3,8 @@ import tempfile
 import hashlib
 from pathlib import Path
 import pytest
-from src.xhcart_core.tools.text_a8 import render_text_a8, process_text_a8
-from src.xhcart_core.domain.errors import ToolError
+from xhcart_core.tools.text_a8 import render_text_a8, process_text_a8
+from xhcart_core.domain.errors import ToolError
 
 
 def test_output_height():

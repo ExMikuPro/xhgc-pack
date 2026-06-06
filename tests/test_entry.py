@@ -11,9 +11,9 @@ from pathlib import Path
 # 添加项目根目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.xhcart_core.api import pack_header_icon, inspect_header
+from xhcart_core.api import pack_header_icon, inspect_header
 
-def test_entry_build():
+def run_entry_build():
     """
     测试 ENTRY 段构建功能
     """
@@ -110,5 +110,9 @@ def test_entry_build():
         print(f"\n测试结束")
 
 if __name__ == "__main__":
-    success = test_entry_build()
+    success = run_entry_build()
     sys.exit(0 if success else 1)
+
+
+def test_entry_build():
+    assert run_entry_build()

@@ -70,7 +70,7 @@
 | `/icon/preprocess/resample` | string | ⭕ | `"bilinear"` | nearest / bilinear / bicubic / lanczos | v1 已存在 |
 | `/hash` | object | ⭕ |  | 校验策略开关 | v1 已存在 |
 | `/hash/header_crc32` | bool | ⭕ | `true` | 关键结构 CRC32（CRC-32/IEEE，计算范围见 bin 规范第 6 节） | v1 已存在 |
-| `/hash/image_crc32` | bool | ⭕ | `false` | 图像段 CRC32 | v1 已存在 |
+| `/hash/image_crc32` | bool | ⭕ | `false` | 整镜像 CRC32，写入 cart.bin slot14 (IMAGE_CRC) | v1 已存在 |
 | `/hash/per_chunk_crc32` | bool | ⭕ | `false` | **新增建议**：每个 chunk CRC32，写入地址表槽 `crc32` 字段 | v1.1 新增 |
 | `/hash/per_file_crc32` | bool | ⭕ | `false` | **新增建议**：每个文件条目 CRC32 | v1.1 新增 |
 | `/build` | object | ⭕ |  | **新增建议**：构建行为（不涉及 bin 规范） | v1.1 新增 |

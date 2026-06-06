@@ -1,8 +1,9 @@
 import tempfile
 import os
 import json
-from src.xhcart_core.api import pack_header, inspect_header, verify_header
-from src.xhcart_core.config.load import ConfigError
+import copy
+from xhcart_core.api import pack_header, inspect_header, verify_header
+from xhcart_core.config.load import ConfigError
 
 class TestHeader:
     """
@@ -20,6 +21,8 @@ class TestHeader:
         
         # 创建基础的pack.json
         self.base_pack_json = {
+            "format": "XHGC_PACK",
+            "pack_version": 1,
             "meta": {
                 "title": "Demo Game",
                 "title_zh": "演示游戏",
@@ -83,7 +86,7 @@ class TestHeader:
         测试字符串超长会抛异常
         """
         # 测试title超长
-        long_title_pack_json = self.base_pack_json.copy()
+        long_title_pack_json = copy.deepcopy(self.base_pack_json)
         long_title_pack_json['meta']['title'] = 'A' * 65  # 超过64字节
         self.write_pack_json(long_title_pack_json)
         
@@ -98,7 +101,7 @@ class TestHeader:
         测试cart_id解析正确
         """
         # 测试带0x前缀的cart_id
-        pack_json_with_0x = self.base_pack_json.copy()
+        pack_json_with_0x = copy.deepcopy(self.base_pack_json)
         pack_json_with_0x['meta']['cart_id'] = "0x123456789ABCDEF"
         self.write_pack_json(pack_json_with_0x)
         pack_header(self.pack_json_path, self.header_bin_path)
@@ -106,7 +109,7 @@ class TestHeader:
         assert info['cart_id'] == '0x123456789abcdef'
         
         # 测试不带0x前缀的cart_id
-        pack_json_without_0x = self.base_pack_json.copy()
+        pack_json_without_0x = copy.deepcopy(self.base_pack_json)
         pack_json_without_0x['meta']['cart_id'] = "123456789ABCDEF"
         self.write_pack_json(pack_json_without_0x)
         pack_header(self.pack_json_path, self.header_bin_path)
@@ -127,7 +130,7 @@ class TestHeader:
         """
         测试无效的header_size
         """
-        invalid_pack_json = self.base_pack_json.copy()
+        invalid_pack_json = copy.deepcopy(self.base_pack_json)
         invalid_pack_json['build']['header_size'] = 8192
         self.write_pack_json(invalid_pack_json)
         
@@ -142,7 +145,7 @@ class TestHeader:
         测试缺少必填字段
         """
         # 测试缺少title
-        missing_title_pack_json = self.base_pack_json.copy()
+        missing_title_pack_json = copy.deepcopy(self.base_pack_json)
         del missing_title_pack_json['meta']['title']
         self.write_pack_json(missing_title_pack_json)
         

@@ -17,6 +17,7 @@ class AddrTable:
     SLOT_ENTRY = 3
     SLOT_INDEX = 4
     SLOT_DATA = 5
+    SLOT_IMAGE_CRC = 14
     
     @classmethod
     def slot_offset(cls, i: int) -> int:

@@ -1,9 +1,9 @@
 from pathlib import Path
-from src.xhcart_core.config.pack_spec import PackSpec
-from src.xhcart_core.utils.io import atomic_write
-from src.xhcart_core.utils.align import align_to
-from src.xhcart_core.utils.hashing import calculate_crc32
-from src.xhcart_core.format.xhgc.addr_table import AddrTable
+from xhcart_core.config.pack_spec import PackSpec
+from xhcart_core.utils.io import atomic_write
+from xhcart_core.utils.align import align_to
+from xhcart_core.utils.hashing import calculate_crc32
+from xhcart_core.format.xhgc.addr_table import AddrTable
 import struct
 
 class BuildManf:
@@ -92,25 +92,26 @@ class BuildManf:
             header_data_with_crc = self.calculate_and_write_header_crc(header_data)
         else:
             header_data_with_crc = header_data
+        existing_payload = cart_data[self.HEADER_SIZE:]
         
         # 组装完整数据（包含更新后的header）
-        cart_data = header_data_with_crc + cart_data[self.HEADER_SIZE:] + manf_content + padding
+        cart_data = header_data_with_crc + existing_payload + manf_content + padding
         
         # 如果需要计算整个镜像的CRC32
         if image_crc32:
             # 计算整个镜像的CRC32
             image_crc = calculate_crc32(cart_data)
             
-            # 创建新的header副本，写入镜像CRC32到slot6
+            # 创建新的header副本，写入镜像CRC32到slot14
             final_header_data = header_data_with_crc.copy()
-            AddrTable.write_slot(final_header_data, 6, 0, len(cart_data), image_crc)
+            AddrTable.write_slot(final_header_data, AddrTable.SLOT_IMAGE_CRC, 0, len(cart_data), image_crc)
             
             # 再次计算Header CRC32（因为修改了slot6）
             if header_crc32:
                 final_header_data = self.calculate_and_write_header_crc(final_header_data)
             
             # 最终组装数据
-            cart_data = final_header_data + cart_data[self.HEADER_SIZE:] + manf_content + padding
+            cart_data = final_header_data + existing_payload + manf_content + padding
         
         # 原子写入文件
         atomic_write(out_path, cart_data)
@@ -257,7 +258,7 @@ class BuildManf:
             bytearray: 包含CRC32的header数据
         """
         import struct
-        from src.xhcart_core.format.xhgc.header import HeaderV2
+        from xhcart_core.format.xhgc.header import HeaderV2
 
         # 确保输入数据长度为4096
         if len(header_bytes) != 4096:
