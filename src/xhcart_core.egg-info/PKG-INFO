@@ -167,7 +167,7 @@ python main.py <pack.json> <output/cart.bin>
 
 打包工具按照以下顺序构建卡带镜像：
 
-1. **ICON 段**：处理图标文件，转换为 ARGB8888 格式
+1. **ICON 段**：处理图标文件，转换为 ARGB8888 语义、BGRA 字节序的 raw 数据
 2. **MANF 段**：从 meta 字段生成二进制格式的元数据
 3. **ENTRY 段**：编译 Lua 脚本，生成字节码
 4. **DATA 段**：打包资源文件，生成文件数据

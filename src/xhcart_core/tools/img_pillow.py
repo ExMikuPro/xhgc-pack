@@ -24,7 +24,7 @@ def _hex_to_rgba(hex_color: str) -> tuple:
 
 def process_image(image_path: Path, width: int, height: int, mode: str = 'cover', background: str = '#000000', resample: str = 'lanczos') -> bytes:
     """
-    处理图片并转换为ARGB8888 raw格式
+    处理图片并转换为ARGB8888语义、BGRA字节序的raw格式
 
     Args:
         image_path (Path): 图片路径
@@ -35,7 +35,7 @@ def process_image(image_path: Path, width: int, height: int, mode: str = 'cover'
         resample (str): 重采样方法
 
     Returns:
-        bytes: ARGB8888 raw数据
+        bytes: BGRA字节序的raw数据
     """
     # 打开图片
     with Image.open(image_path) as img:
@@ -89,13 +89,13 @@ def process_image(image_path: Path, width: int, height: int, mode: str = 'cover'
         if img.width != width or img.height != height:
             raise ValueError(f"Image resizing failed: expected {width}x{height}, got {img.width}x{img.height}")
 
-        # 转换为ARGB8888 raw格式，按A,R,G,B字节顺序写出
+        # 转换为little-endian ARGB8888 raw格式，按B,G,R,A字节顺序写出
         raw_data = bytearray()
         pixels = img.load()
         for y in range(height):
             for x in range(width):
                 r, g, b, a = pixels[x, y]
-                raw_data.extend(bytes([a, r, g, b]))
+                raw_data.extend(bytes([b, g, r, a]))
 
         # 验证数据长度
         expected_length = width * height * 4

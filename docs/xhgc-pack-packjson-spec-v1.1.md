@@ -59,9 +59,9 @@
 | `/meta/category` | string | ⭕ | `"app"` | **新增建议**：分类（game / tool / demo / app） | v1.1 新增 |
 | `/meta/tags` | string[] | ⭕ | `[]` | **新增建议**：标签列表 | v1.1 新增 |
 | `/meta/author` | object | ⭕ |  | **新增建议**：作者信息，格式 `{ "name": "...", "contact": "..." }` | v1.1 新增 |
-| `/icon` | object | ✅ |  | 应用图标，对应 cart.bin **slot0(ICON)**，输出固定为 200×200 ARGB8888（160000 bytes） | 唯一图标字段，v1.1 正式字段 |
+| `/icon` | object | ✅ |  | 应用图标，对应 cart.bin **slot0(ICON)**，输出固定为 200×200 ARGB8888 语义、BGRA 字节序（160000 bytes） | 唯一图标字段，v1.1 正式字段 |
 | `/icon/path` | string | ✅ |  | 源图路径（相对路径） | v1 已存在 |
-| `/icon/format` | string | ✅ | `"ARGB8888"` | 输出像素格式，当前仅允许 `"ARGB8888"` | v1 已存在 |
+| `/icon/format` | string | ✅ | `"ARGB8888"` | 输出像素语义，当前仅允许 `"ARGB8888"`；raw 字节顺序为 BGRA | v1 已存在 |
 | `/icon/width` | int | ✅ | `200` | 输出宽度，**必须为 200**，否则打包器报错 | v1 已存在，v1.1 锁定值 |
 | `/icon/height` | int | ✅ | `200` | 输出高度，**必须为 200**，否则打包器报错 | v1 已存在，v1.1 锁定值 |
 | `/icon/preprocess` | object | ⭕ |  | 预处理策略（缩放/补底色/采样） | v1 已存在 |

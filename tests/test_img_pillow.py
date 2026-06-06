@@ -3,7 +3,7 @@ from PIL import Image
 from xhcart_core.tools.img_pillow import process_image
 
 
-def test_process_image_outputs_argb8888_byte_order(tmp_path):
+def test_process_image_outputs_bgra_byte_order(tmp_path):
     image_path = tmp_path / 'pixel.png'
     Image.new('RGBA', (1, 1), (10, 20, 30, 40)).save(image_path)
 
@@ -15,7 +15,7 @@ def test_process_image_outputs_argb8888_byte_order(tmp_path):
         resample='nearest',
     )
 
-    assert raw_data == bytes([40, 10, 20, 30])
+    assert raw_data == bytes([30, 20, 10, 40])
 
 
 def test_process_image_accepts_aarrggbb_background(tmp_path):
@@ -31,4 +31,4 @@ def test_process_image_accepts_aarrggbb_background(tmp_path):
         resample='nearest',
     )
 
-    assert raw_data[:4] == bytes([128, 1, 2, 3])
+    assert raw_data[:4] == bytes([3, 2, 1, 128])

@@ -35,9 +35,9 @@
 | 区段 | 起始偏移 | 大小 | 用途 |
 |---|---:|---:|---|
 | HEADER | `0x0000_0000` | 4096 | 元信息 + 映射表 + Header CRC |
-| ICON（ARGB8888, 200×200） | `0x0000_1000` | 160000 | launcher 图标原始像素 |
+| ICON（ARGB8888/BGRA bytes, 200×200） | `0x0000_1000` | 160000 | launcher 图标原始像素 |
 | PADDING | after ICON | 到 4KB 对齐 | 补齐到下一段起点 |
-| MANF | 4KB 对齐起点 | 变长 | manifest JSON（由 pack.json meta 生成） |
+| MANF | 4KB 对齐起点 | 变长 | manifest 二进制元数据（由 pack.json meta 生成） |
 | PADDING | after MANF | 到 4KB 对齐 | 补齐 |
 | INDEX | 4KB 对齐起点 | 变长 | 文件索引表（打包器自动生成） |
 | PADDING | after INDEX | 到 4KB 对齐 | 补齐 |
@@ -79,9 +79,10 @@
 | `publisher` | `0x009C` | char[64] | 64 | 发行方/作者（对应 `meta.publisher`，可为空） |
 | `version_str` | `0x00DC` | char[32] | 32 | 版本号字符串（对应 `meta.version`） |
 | `entry` | `0x00FC` | char[128] | 128 | 入口脚本路径（对应 `meta.entry`，如 `app/main.lua`） |
-| `min_fw` | `0x017C` | char[32] | 32 | 最低固件版本（对应 `meta.min_fw`，可为空） |
-| `reserved` | `0x019C..0x0EFF` | bytes | - | 预留区，**必须填 0** |
-| `addr_table` | `0x0F00..0x0FFB` | bytes | 252 | 固定地址表（映射表） |
+| `min_fw` | `0x017C` | char[16] | 16 | 最低固件版本（对应 `meta.min_fw`，可为空） |
+| `reserved` | `0x018C..0x0EFF` | bytes | - | 预留区，**必须填 0** |
+| `addr_table` | `0x0F00..0x0FEF` | bytes | 240 | 固定地址表（映射表），15 个 16B 槽 |
+| `addr_table_reserved` | `0x0FF0..0x0FFB` | bytes | 12 | 地址表后预留区，**必须填 0** |
 | `header_crc32` | `0x0FFC..0x0FFF` | u32 | 4 | Header CRC32/IEEE（见第 6 节） |
 
 ---
@@ -90,8 +91,9 @@
 
 ### 5.1 位置与大小（固定）
 
-- 地址表区域 **必须（MUST）** 固定：`0x0F00 .. 0x0FFB`（252 bytes）
-- 槽位数：`252 / 16 = 15` 个槽（slot0..slot14）
+- 地址表区域 **必须（MUST）** 固定：`0x0F00 .. 0x0FEF`（240 bytes）
+- `0x0FF0 .. 0x0FFB` 为 Header 内预留区，当前必须填 `0x00`
+- 槽位数：`240 / 16 = 15` 个槽（slot0..slot14）
 - 每槽固定 16 bytes：
 
 ```c
@@ -107,9 +109,9 @@ typedef struct __attribute__((packed)) {
 
 | slot | 表内偏移 | 名称 | 用途 |
 |---:|---:|---|---|
-| 0 | `0x0F00` | ICON | 200×200 ARGB8888 图标（对应 pack.json `icon`） |
+| 0 | `0x0F00` | ICON | 200×200 ARGB8888 语义、BGRA 字节序图标（对应 pack.json `icon`） |
 | 1 | `0x0F10` | THMB | 缩略图（可选） |
-| 2 | `0x0F20` | MANF | manifest JSON（对应 pack.json `meta` 全量内容） |
+| 2 | `0x0F20` | MANF | manifest 二进制元数据（对应 pack.json `meta` 全量内容） |
 | 3 | `0x0F30` | ENTRY | 入口脚本数据块（可选：若不走文件路径） |
 | 4 | `0x0F40` | INDEX | 文件索引表（打包器自动生成，DATA 区的文件目录） |
 | 5 | `0x0F50` | DATA | 数据区（LUA + RES 文件数据，对应 pack.json `chunks` 中 LUA/RES） |
@@ -163,9 +165,9 @@ typedef struct __attribute__((packed)) {
 
 - 来源：pack.json `icon` 字段，经打包器预处理后写入。
 - 尺寸固定：`200 × 200`
-- 像素格式：`ARGB8888`
+- 像素语义：`ARGB8888`
 - 存储顺序：row-major，从上到下、从左到右
-- 每像素 4 bytes：`A, R, G, B`（建议 A=0xFF 表示不透明）
+- 每像素 4 bytes：`B, G, R, A`（little-endian ARGB8888 字节序，建议 A=0xFF 表示不透明）
 - 大小固定：`200 × 200 × 4 = 160000` bytes
 
 ### 7.2 MANF（slot2）
@@ -329,7 +331,7 @@ Entry[1]:
 2. 遍历/二分查找 Entry，匹配目标路径
 3. 读 slot5(DATA) → 得到 DATA 段偏移
 4. 实际文件位置 = DATA段偏移 + entry.data_offset
-5. 读取 entry.data_size 字节 → 若压缩则解压
+5. 读取 entry.data_size 字节
 ```
 
 ### 7.4 DATA（slot5）
@@ -337,10 +339,10 @@ Entry[1]:
 - 来源：pack.json `chunks` 中 `type = "LUA"` 和 `type = "RES"` 的条目，按 chunks 列表顺序、同一 chunk 内字典序写入。
 - 格式：所有文件数据**连续拼接**，无额外 framing。
 - 文件边界由 INDEX 条目的 `data_offset` + `data_size` 定位，DATA 段本身无分隔符。
-- 压缩：若 pack.json 对应 chunk 设置 `compress = "lz4"`，则该文件在 DATA 中存储压缩后数据，`data_size` 为压缩后大小；`crc32` 计算对象为**压缩后数据**。
+- 当前 v2.2 INDEX 条目不包含压缩算法和解压后大小字段，因此 STM32 解析端应按未压缩文件读取。
+- `compress = "lz4"` 为后续扩展预留；启用前必须扩展 INDEX 格式或另行提供每个文件的压缩元数据。
 
-> 当前 `compress` 仅支持 `"none"` 和 `"lz4"`。  
-> 读取流程：INDEX 查找路径 → 得到 `data_offset` / `data_size` → 从 DATA 段偏移读取 → 若压缩则解压。
+> 读取流程：INDEX 查找路径 → 得到 `data_offset` / `data_size` → 从 DATA 段偏移读取。
 
 ### 7.5 TITLE_A8（slot8，可选）
 
@@ -368,8 +370,9 @@ Entry[1]:
 - publisher：`0x009C`（64B）
 - version_str：`0x00DC`（32B）
 - entry：`0x00FC`（128B）
-- min_fw：`0x017C`（32B）
-- addr_table：`0x0F00`（252B）
+- min_fw：`0x017C`（16B）
+- addr_table：`0x0F00`（240B，15 slots）
+- addr_table_reserved：`0x0FF0..0x0FFB`（12B，填 0）
 - header_crc32：`0x0FFC`（u32）
 
 **地址表槽位：**
@@ -389,16 +392,29 @@ Entry[1]:
 
 | pack.json | bin |
 |---|---|
-| `meta.*` | Header 定长字段 + slot2(MANF) JSON |
-| `icon` | slot0(ICON) 160000B ARGB8888 |
+| `meta.*` | Header 定长字段 + slot2(MANF) 二进制元数据 |
+| `icon` | slot0(ICON) 160000B ARGB8888 语义、BGRA 字节序 |
 | `chunks[MANF]` | slot2(MANF) |
 | `chunks[LUA]` / `chunks[RES]` | slot5(DATA)，目录在 slot4(INDEX) |
 
 ---
 
-## 9. 版本记录
+## 9. STM32 解析注意事项
+
+- 不建议把文件缓冲区或 Flash 地址直接 cast 成 `struct *` 读取；应使用 `read_le16` / `read_le32` / `read_le64` 逐字节或 `memcpy` 后解析，避免未对齐访问问题。
+- 每次使用 `offset + size` 前必须做越界检查，并确认加法没有整数溢出。
+- Header 固定只读 4096B；地址表只解析 slot0..slot14，共 15 个槽。
+- 对 `size == 0` 的 slot 必须跳过；对未知或预留 slot 不应报错。
+- MANF 字符串字段不保证以 `\0` 结尾，解析端应按字段 `size` 复制，并在本地输出缓冲区末尾补 `\0`。
+- INDEX 的路径名不含 `\0`；解析端匹配路径时应按 `name_len` 比较。
+- 当前 DATA 文件按未压缩读取；若后续启用压缩，必须先扩展 INDEX 元数据。
+
+---
+
+## 10. 版本记录
 
 | 版本 | 日期 | 变更摘要 |
 |---|---|---|
 | v2.1 | - | 修订 ICON 段为 ARGB8888（200×200，160000B） |
 | v2.2 | 2026-02-21 | 补全 slot2(MANF) / slot4(INDEX) / slot5(DATA) 格式定义；MANF 改为自定义二进制格式（带偏移表，field_id 查表，无需 JSON 解析器）；补充完整镜像布局表；新增 INDEX 结构体定义及实际验证示例；明确 INDEX data_offset 为相对 DATA 段起点的偏移；新增文件读取流程；新增 pack.json → bin 对应关系速查；更新槽位说明与 pack.json 字段对应 |
+| v2.2-revA | 2026-06-06 | 修正文档与当前打包器实现不一致处：MANF 明确为二进制元数据；地址表修正为 `0x0F00..0x0FEF` 共 240B/15 slots；`0x0FF0..0x0FFB` 标为预留；`min_fw` 修正为 16B；DATA 压缩说明改为后续扩展；新增 STM32 解析注意事项。 |
