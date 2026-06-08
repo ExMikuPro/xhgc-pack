@@ -1,4 +1,4 @@
-# st-luac 编译指南
+# luavm 编译指南
 **STM32H743 · Lua 5.4 交叉编译器构建与验证**
 
 ---
@@ -10,7 +10,7 @@
   ```
   LuaPort/
     src/          ← 所有 .c 源文件及 luaconf.h
-    tool/bin/     ← st-luac 输出位置
+    tool/bin/     ← luavm 输出位置
   ```
 
 ---
@@ -51,7 +51,7 @@ STM32H743 的最优组合：
 在 `LuaPort/src/` 目录下执行：
 
 ```bash
-clang -I. -o ../tool/bin/st-luac \
+clang -I. -o ../tool/bin/luavm \
   -DLUA_32BITS=0 \
   -DLUA_INT_TYPE=1 \
   -DLUA_FLOAT_TYPE=2 \
@@ -81,7 +81,7 @@ clang -I. -o ../tool/bin/st-luac \
 
 ```bash
 echo 'x=1.0' > /tmp/t.lua
-./st-luac -o /tmp/t.luac /tmp/t.lua
+./luavm --compile /tmp/t.lua /tmp/t.luac
 
 python3 -c "
 d = open('/tmp/t.luac', 'rb').read()
@@ -131,7 +131,7 @@ lua_Number:          8 bytes
 | index 14 的值 | 含义 | 状态 |
 |---|---|---|
 | `08` | lua_Number = 8 bytes（double） | ✅ 正确 |
-| `04` | lua_Number = 4 bytes（float） | ❌ 错误，st-luac 未用正确配置编译 |
+| `04` | lua_Number = 4 bytes（float） | ❌ 错误，luavm 未用正确配置编译 |
 
 ### 5.4 推荐的二进制查看工具
 
@@ -154,7 +154,7 @@ lua_Number:          8 bytes
 
 ## 6. 打包后验证 cart.bin
 
-重新编译 `st-luac` 并用 xhgc-pack 打包后，用以下脚本验证 ENTRY slot：
+重新编译 `luavm` 并用 xhgc-pack 打包后，用以下脚本验证 ENTRY slot：
 
 ```python
 import struct, zlib
@@ -184,7 +184,7 @@ print(f'段 CRC32     : {"✅" if (zlib.crc32(seg)&0xFFFFFFFF)==crc else "❌"}'
 ```
 修改 luaconf.h 或 Lua VM 源码
         ↓
-重新编译 st-luac（第3节）
+重新编译 luavm（第3节）
         ↓
 验证编译产物字节码头部（第4节）
         ↓
@@ -197,4 +197,4 @@ xhgc-pack 重新打包 cart.bin
 烧录测试
 ```
 
-> ⚠️ **重要**：`st-luac`（打包器）和 STM32 固件中的 Lua VM 必须使用**同一份** `luaconf.h`，字节码头部的类型信息才能匹配。任何一方修改后，另一方必须同步更新并重新编译。
+> ⚠️ **重要**：`luavm`（打包器）和 STM32 固件中的 Lua VM 必须使用**同一份** `luaconf.h`，字节码头部的类型信息才能匹配。任何一方修改后，另一方必须同步更新并重新编译。

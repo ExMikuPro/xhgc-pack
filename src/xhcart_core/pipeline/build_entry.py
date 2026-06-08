@@ -9,13 +9,13 @@ import tempfile
 import sys
 import os
 
-def get_st_luac_path():
+def get_luavm_path():
     if getattr(sys, 'frozen', False):
         # PyInstaller 打包后，资源在 sys._MEIPASS 下
-        return os.path.join(sys._MEIPASS, 'tool', 'bin', 'st-luac')
+        return os.path.join(sys._MEIPASS, 'tool', 'bin', 'luavm')
     else:
         # 开发环境
-        return os.path.join(os.path.dirname(__file__), '..', '..', '..', 'tool', 'bin', 'st-luac')
+        return os.path.join(os.path.dirname(__file__), '..', '..', '..', 'tool', 'bin', 'luavm')
 
 class BuildEntry:
     """
@@ -222,11 +222,11 @@ class BuildEntry:
 
         try:
             # 构建编译命令
-            luac_path = Path(get_st_luac_path())
-            if not luac_path.exists():
-                raise ValueError(f"st-luac not found: {luac_path}")
+            luavm_path = Path(get_luavm_path())
+            if not luavm_path.exists():
+                raise ValueError(f"luavm not found: {luavm_path}")
 
-            cmd = [str(luac_path), "-o", tmp_path, str(lua_path)]
+            cmd = [str(luavm_path), "--compile", str(lua_path), tmp_path]
 
             # 执行编译命令
             result = subprocess.run(
@@ -237,7 +237,8 @@ class BuildEntry:
 
             # 检查编译是否成功
             if result.returncode != 0:
-                raise ValueError(f"Failed to compile Lua file: {result.stderr}")
+                message = result.stderr.strip() or result.stdout.strip()
+                raise ValueError(f"Failed to compile Lua file: {message}")
 
             # 读取编译后的字节码
             with open(tmp_path, 'rb') as f:

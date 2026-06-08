@@ -31,7 +31,7 @@ cd /Volumes/Sector0/AppData/PyCharm/xhgc-pack
 确认 Lua 编译器存在：
 
 ```bash
-ls -l tool/bin/st-luac
+ls -l tool/bin/luavm
 ```
 
 如果当前在 `docs/` 目录下，可以先回到项目根目录：
@@ -166,7 +166,7 @@ Header CRC32 verification PASSED
 .venv/bin/pyinstaller \
   --onefile \
   --name xhgc-pack \
-  --add-binary "tool/bin/st-luac:tool/bin" \
+  --add-binary "tool/bin/luavm:tool/bin" \
   --hidden-import PIL \
   --hidden-import PIL.Image \
   --hidden-import PIL.ImageOps \
