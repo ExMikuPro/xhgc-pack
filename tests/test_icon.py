@@ -3,8 +3,9 @@ import os
 import json
 import hashlib
 import copy
+import zlib
 from PIL import Image
-from xhcart_core.api import pack_header_icon, inspect_header
+from xhcart_core.api import pack_header_icon, inspect_header, verify_header
 from xhcart_core.utils.align import align_to
 
 class TestIcon:
@@ -108,7 +109,7 @@ class TestIcon:
     
     def test_icon_slot(self):
         """
-        测试slot0 ICON offset==4096, size==160000, crc32==0
+        测试slot0 ICON offset==4096, size==160000, crc32等于payload IEEE CRC32
         """
         # 创建测试用的PNG icon
         icon_path = os.path.join(self.temp_dir.name, 'icon.png')
@@ -131,7 +132,16 @@ class TestIcon:
         assert icon_slot is not None, "ICON slot not found"
         assert icon_slot['data_offset'] == 4096, f"ICON offset should be 4096, got {icon_slot['data_offset']}"
         assert icon_slot['size'] == 160000, f"ICON size should be 160000, got {icon_slot['size']}"
-        assert icon_slot['crc32'] == 0, f"ICON crc32 should be 0, got {icon_slot['crc32']}"
+        with open(self.cart_bin_path, 'rb') as f:
+            cart_data = f.read()
+        start = icon_slot['data_offset']
+        end = start + icon_slot['size']
+        expected_crc32 = zlib.crc32(cart_data[start:end]) & 0xFFFFFFFF
+        assert icon_slot['crc32'] != 0, "ICON crc32 should be written"
+        assert icon_slot['crc32'] == expected_crc32, (
+            f"ICON crc32 should be 0x{expected_crc32:08X}, got 0x{icon_slot['crc32']:08X}"
+        )
+        assert verify_header(self.cart_bin_path), "Header CRC32 should verify after slot CRC update"
     
     def test_icon_not_found(self):
         """
@@ -230,6 +240,17 @@ class TestIcon:
         assert slots['IMAGE_CRC']['data_offset'] == 0
         assert slots['IMAGE_CRC']['size'] == file_size
         assert slots['IMAGE_CRC']['crc32'] != 0
+
+        with open(self.cart_bin_path, 'rb') as f:
+            cart_data = f.read()
+        for slot_name in ['ICON', 'MANF', 'ENTRY', 'INDEX', 'DATA']:
+            slot = slots[slot_name]
+            start = slot['data_offset']
+            end = start + slot['size']
+            expected_crc32 = zlib.crc32(cart_data[start:end]) & 0xFFFFFFFF
+            assert slot['crc32'] == expected_crc32, (
+                f"{slot_name} crc32 should be 0x{expected_crc32:08X}, got 0x{slot['crc32']:08X}"
+            )
     
     def teardown_method(self):
         """

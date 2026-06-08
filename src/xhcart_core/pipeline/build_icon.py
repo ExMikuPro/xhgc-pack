@@ -78,12 +78,12 @@ class BuildIcon:
         icon_offset = self.HEADER_SIZE
         icon_size = self.ICON_SIZE
 
-        # 写入slot0 (ICON)
-        AddrTable.write_slot(header_data, AddrTable.SLOT_ICON, icon_offset, icon_size, 0)
-
         # 读取和处理icon
         icon_path = self._resolve_icon_path()
         icon_data = self._load_and_process_icon(icon_path)
+
+        # 写入slot0 (ICON)
+        AddrTable.write_slot(header_data, AddrTable.SLOT_ICON, icon_offset, icon_size, 0)
 
         # 计算总大小并对齐
         total_size = icon_offset + icon_size
@@ -97,11 +97,11 @@ class BuildIcon:
         if self.pack_spec.hash:
             image_crc32 = self.pack_spec.hash.image_crc32
 
+        cart_data = header_data + icon_data + padding
+        AddrTable.write_present_slot_payload_crcs(header_data, cart_data)
+
         # 如果需要计算整个镜像的CRC32
         if image_crc32:
-            # 先组装完整数据（不包含CRC）
-            temp_cart_data = header_data + icon_data + padding
-
             # 计算并写入Header CRC32
             header_data_with_crc = self.calculate_and_write_header_crc(header_data)
 

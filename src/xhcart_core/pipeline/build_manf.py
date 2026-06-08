@@ -87,12 +87,15 @@ class BuildManf:
             header_crc32 = self.pack_spec.hash.header_crc32
             image_crc32 = self.pack_spec.hash.image_crc32
         
+        existing_payload = cart_data[self.HEADER_SIZE:]
+        cart_data = header_data + existing_payload + manf_content + padding
+        AddrTable.write_present_slot_payload_crcs(header_data, cart_data)
+
         # 计算并写入Header CRC32
         if header_crc32:
             header_data_with_crc = self.calculate_and_write_header_crc(header_data)
         else:
             header_data_with_crc = header_data
-        existing_payload = cart_data[self.HEADER_SIZE:]
         
         # 组装完整数据（包含更新后的header）
         cart_data = header_data_with_crc + existing_payload + manf_content + padding
