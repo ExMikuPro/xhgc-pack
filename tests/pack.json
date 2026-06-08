@@ -69,6 +69,14 @@
       "strip_prefix": "assets/",
       "name_prefix": "assets/",
       "compress": "none",
+      "image_format": "BGRA8888",
+      "image_preprocess": {
+        "width": 200,
+        "height": 200,
+        "mode": "contain",
+        "background": "#000000",
+        "resample": "lanczos"
+      },
       "exclude": ["**/.DS_Store"],
       "order": "lex"
     }

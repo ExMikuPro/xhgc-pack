@@ -79,8 +79,8 @@
 | `publisher` | `0x009C` | char[64] | 64 | 发行方/作者（对应 `meta.publisher`，可为空） |
 | `version_str` | `0x00DC` | char[32] | 32 | 版本号字符串（对应 `meta.version`） |
 | `entry` | `0x00FC` | char[128] | 128 | 入口脚本路径（对应 `meta.entry`，如 `app/main.lua`） |
-| `min_fw` | `0x017C` | char[16] | 16 | 最低固件版本（对应 `meta.min_fw`，可为空） |
-| `reserved` | `0x018C..0x0EFF` | bytes | - | 预留区，**必须填 0** |
+| `min_fw` | `0x017C` | char[32] | 32 | 最低固件版本（对应 `meta.min_fw`，可为空） |
+| `reserved` | `0x019C..0x0EFF` | bytes | - | 预留区，**必须填 0** |
 | `addr_table` | `0x0F00..0x0FEF` | bytes | 240 | 固定地址表（映射表），15 个 16B 槽 |
 | `addr_table_reserved` | `0x0FF0..0x0FFB` | bytes | 12 | 地址表后预留区，**必须填 0** |
 | `header_crc32` | `0x0FFC..0x0FFF` | u32 | 4 | Header CRC32/IEEE（见第 6 节） |
@@ -265,84 +265,106 @@ field_count = 14
 - 来源：打包器根据 DATA 区内容**自动生成**，pack.json 中无需声明。
 - 用途：DATA 区的文件目录，解析端通过 INDEX 定位 DATA 内某个文件。
 - INDEX 与 DATA 是**独立的段**，INDEX 仅存储目录信息，不包含文件数据本身。
-- INDEX 中的 `data_offset` 是**相对 DATA 段起点的偏移**，不是文件在镜像中的绝对偏移。
+- INDEX 中的 `data_off` 是**相对 DATA 段起点的偏移**，不是文件在镜像中的绝对偏移。
 
-**INDEX Header（8 bytes）：**
+**XHGCIDX2 Header（32 bytes）：**
 
 ```c
 typedef struct __attribute__((packed)) {
-  uint32_t entry_count;   // 文件条目数量
-  uint32_t reserved;      // 预留，填 0
-} XhgcIndexHeader;
+  char     magic[8];      // "XHGCIDX2"
+  uint16_t version;       // 1
+  uint16_t entry_size;    // 32
+  uint32_t count;         // 文件条目数量
+  uint32_t entries_off;   // entry 表相对 INDEX 段起点的偏移，当前为 32
+  uint32_t strings_off;   // string table 相对 INDEX 段起点的偏移
+  uint32_t strings_size;  // string table 字节数
+  uint32_t flags;         // 0
+} XhgcIndex2Header;
 ```
 
-**INDEX Entry（每条目 16 bytes 定长头 + 变长路径名）：**
+**XHGCIDX2 Entry（每条目 32 bytes）：**
 
 ```c
+#define XHGC_RES_IMAGE       1
+#define XHGC_RES_SCRIPT      2
+#define XHGC_IMG_NONE        0
+#define XHGC_IMG_BGRA8888    1
+
 typedef struct __attribute__((packed)) {
-  uint32_t data_offset;   // 相对 DATA 段起点的字节偏移（非镜像绝对偏移）
-  uint32_t data_size;     // 文件数据长度（bytes）
-  uint32_t crc32;         // 文件 CRC32/IEEE（未启用填 0，对应 pack.json hash.per_file_crc32）
-  uint8_t  name_len;      // 包内路径字符串长度（bytes，不含 \0，最大 255）
-  uint8_t  reserved[3];   // 预留，填 0
-  // 紧跟：name_len bytes 的 UTF-8 包内路径（不含 \0）
-} XhgcIndexEntry;
+  uint32_t path_hash;     // FNV-1a 32-bit，基于 cart 内相对路径
+  uint32_t path_off;      // 路径字符串在 string table 内的偏移
+  uint32_t data_off;      // 相对 DATA 段起点的字节偏移
+  uint32_t size;          // 资源 blob 字节数
+  uint32_t crc32;         // 资源 blob CRC32/IEEE
+  uint8_t  type;          // XHGC_RES_*
+  uint8_t  format;        // XHGC_IMG_*，非图片为 0
+  uint16_t width;         // 图片宽度，非图片为 0
+  uint16_t height;        // 图片高度，非图片为 0
+  uint16_t flags;         // 0
+  uint32_t reserved;      // 0
+} XhgcIndex2Entry;
 ```
 
 **INDEX 整体内存布局：**
 
 ```
-[ XhgcIndexHeader (8B)       ]
-[ XhgcIndexEntry #0 头 (16B) ][ name #0 ]
-[ XhgcIndexEntry #1 头 (16B) ][ name #1 ]
+[ XhgcIndex2Header (32B)       ]
+[ XhgcIndex2Entry #0 (32B)     ]
+[ XhgcIndex2Entry #1 (32B)     ]
 ...
-[ XhgcIndexEntry #N-1 头     ][ name #N-1 ]
+[ XhgcIndex2Entry #N-1 (32B)   ]
+[ string table: "path\0path\0..." ]
 ```
 
 - 所有条目按包内路径**字典序升序**排列（与 pack.json `order = "lex"` 对应），支持二分查找。
-- `name_len = 0` 的条目为非法条目，打包器**必须**报错，不得写入。
+- 路径字符串为 UTF-8 且以 `\0` 结尾；`path_off` 指向 string table 内对应字符串。
+- `path_hash` 使用 FNV-1a 32-bit，对 cart 内相对路径的 UTF-8 字节计算。
 
 **实际示例（来自验证数据）：**
 
 ```
 INDEX Header:
-  entry_count = 2
-  reserved    = 0
+  magic       = "XHGCIDX2"
+  version     = 1
+  entry_size  = 32
+  count       = 2
+  entries_off = 32
 
 Entry[0]:
-  data_offset = 0           ← DATA 起点
-  data_size   = 11085       ← app/main.lua 大小
-  crc32       = 0xB15271F7
-  name_len    = 12
+  type        = XHGC_RES_SCRIPT
+  format      = XHGC_IMG_NONE
+  data_off    = 0
+  size        = app/main.lua 大小
   name        = "app/main.lua"
 
 Entry[1]:
-  data_offset = 11085       ← 紧接 main.lua 之后
-  data_size   = 2347227     ← PNG 大小
-  crc32       = 0xA8329165
-  name_len    = 50
-  name        = "assets/Gemini_Generated_Image_lt7ufalt7ufalt7u.png"
+  type        = XHGC_RES_IMAGE
+  format      = XHGC_IMG_BGRA8888
+  width       = 200
+  height      = 200
+  size        = 160000
+  name        = "assets/test.png"
 ```
 
 **文件读取流程：**
 
 ```
 1. 读 slot4(INDEX) → 得到 INDEX 段偏移
-2. 遍历/二分查找 Entry，匹配目标路径
+2. 遍历/二分查找 Entry，用 path_hash 和 string table 匹配目标路径
 3. 读 slot5(DATA) → 得到 DATA 段偏移
-4. 实际文件位置 = DATA段偏移 + entry.data_offset
-5. 读取 entry.data_size 字节
+4. 实际文件位置 = DATA段偏移 + entry.data_off
+5. 读取 entry.size 字节；图片可直接使用 entry.format/width/height
 ```
 
 ### 7.4 DATA（slot5）
 
 - 来源：pack.json `chunks` 中 `type = "LUA"` 和 `type = "RES"` 的条目，按 chunks 列表顺序、同一 chunk 内字典序写入。
 - 格式：所有文件数据**连续拼接**，无额外 framing。
-- 文件边界由 INDEX 条目的 `data_offset` + `data_size` 定位，DATA 段本身无分隔符。
-- 当前 v2.2 INDEX 条目不包含压缩算法和解压后大小字段，因此 STM32 解析端应按未压缩文件读取。
+- 文件边界由 INDEX 条目的 `data_off` + `size` 定位，DATA 段本身无分隔符。
+- 当前 XHGCIDX2 条目不包含压缩算法和解压后大小字段，因此 STM32 解析端应按未压缩文件读取。
 - `compress = "lz4"` 为后续扩展预留；启用前必须扩展 INDEX 格式或另行提供每个文件的压缩元数据。
-
-> 读取流程：INDEX 查找路径 → 得到 `data_offset` / `data_size` → 从 DATA 段偏移读取。
+- RES 图片若在 pack.json 中启用 `image_format = "BGRA8888"`，DATA 中写入的是 raw `B,G,R,A` 像素字节；宽高和像素格式写在对应 XHGCIDX2 entry 中。
+> 读取流程：INDEX 查找路径 → 得到 `data_off` / `size` → 从 DATA 段偏移读取。
 
 ### 7.5 TITLE_A8（slot8，可选）
 
@@ -370,7 +392,7 @@ Entry[1]:
 - publisher：`0x009C`（64B）
 - version_str：`0x00DC`（32B）
 - entry：`0x00FC`（128B）
-- min_fw：`0x017C`（16B）
+- min_fw：`0x017C`（32B）
 - addr_table：`0x0F00`（240B，15 slots）
 - addr_table_reserved：`0x0FF0..0x0FFB`（12B，填 0）
 - header_crc32：`0x0FFC`（u32）
@@ -406,7 +428,7 @@ Entry[1]:
 - Header 固定只读 4096B；地址表只解析 slot0..slot14，共 15 个槽。
 - 对 `size == 0` 的 slot 必须跳过；对未知或预留 slot 不应报错。
 - MANF 字符串字段不保证以 `\0` 结尾，解析端应按字段 `size` 复制，并在本地输出缓冲区末尾补 `\0`。
-- INDEX 的路径名不含 `\0`；解析端匹配路径时应按 `name_len` 比较。
+- XHGCIDX2 的路径名存放在 string table 中，路径字符串以 `\0` 结尾；解析端匹配路径时应使用 `path_off` 找到字符串，并可先用 `path_hash` 快速过滤。
 - 当前 DATA 文件按未压缩读取；若后续启用压缩，必须先扩展 INDEX 元数据。
 
 ---
@@ -416,5 +438,5 @@ Entry[1]:
 | 版本 | 日期 | 变更摘要 |
 |---|---|---|
 | v2.1 | - | 修订 ICON 段为 ARGB8888（200×200，160000B） |
-| v2.2 | 2026-02-21 | 补全 slot2(MANF) / slot4(INDEX) / slot5(DATA) 格式定义；MANF 改为自定义二进制格式（带偏移表，field_id 查表，无需 JSON 解析器）；补充完整镜像布局表；新增 INDEX 结构体定义及实际验证示例；明确 INDEX data_offset 为相对 DATA 段起点的偏移；新增文件读取流程；新增 pack.json → bin 对应关系速查；更新槽位说明与 pack.json 字段对应 |
-| v2.2-revA | 2026-06-06 | 修正文档与当前打包器实现不一致处：MANF 明确为二进制元数据；地址表修正为 `0x0F00..0x0FEF` 共 240B/15 slots；`0x0FF0..0x0FFB` 标为预留；`min_fw` 修正为 16B；DATA 压缩说明改为后续扩展；新增 STM32 解析注意事项。 |
+| v2.2 | 2026-02-21 | 补全 slot2(MANF) / slot4(INDEX) / slot5(DATA) 格式定义；MANF 改为自定义二进制格式（带偏移表，field_id 查表，无需 JSON 解析器）；补充完整镜像布局表；新增 XHGCIDX2 INDEX 结构体定义及实际验证示例；明确 INDEX data_off 为相对 DATA 段起点的偏移；新增文件读取流程；新增 pack.json → bin 对应关系速查；更新槽位说明与 pack.json 字段对应 |
+| v2.2-revA | 2026-06-06 | 修正文档与当前打包器实现不一致处：MANF 明确为二进制元数据；地址表修正为 `0x0F00..0x0FEF` 共 240B/15 slots；`0x0FF0..0x0FFB` 标为预留；`min_fw` 修正为 32B；DATA 压缩说明改为后续扩展；新增 STM32 解析注意事项。 |

@@ -14,6 +14,18 @@ class BuildData:
     # 固定常量
     HEADER_SIZE = 4096
     ALIGN_SIZE = 4096
+    INDEX_MAGIC = b'XHGCIDX2'
+    INDEX_VERSION = 1
+    INDEX_HEADER_SIZE = 32
+    INDEX_ENTRY_SIZE = 32
+    XHGC_RES_IMAGE = 1
+    XHGC_RES_SCRIPT = 2
+    XHGC_IMG_NONE = 0
+    XHGC_IMG_BGRA8888 = 1
+    IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp', '.webp'}
+    RES_IMAGE_MAGIC = b'XIMG'
+    RES_IMAGE_FORMAT_BGRA8888 = 1
+    RES_IMAGE_HEADER_SIZE = 24
 
     def __init__(self, pack_spec: PackSpec):
         """
@@ -74,9 +86,8 @@ class BuildData:
                 # 生成包内路径
                 pack_path = name_prefix + rel_path
 
-                # 读取文件内容
-                with open(file_path, 'rb') as f:
-                    file_content = f.read()
+                # 读取文件内容，RES图片可按配置转换为BGRA8888 raw数据
+                file_content, file_meta = self._read_chunk_file(file_path, chunk_type, chunk)
 
                 # 计算文件大小和CRC32
                 file_size = len(file_content)
@@ -91,7 +102,11 @@ class BuildData:
                     'path': pack_path,
                     'offset': file_offset,
                     'size': file_size,
-                    'crc32': file_crc32
+                    'crc32': file_crc32,
+                    'type': file_meta.get('type', self._resource_type_for_chunk(chunk_type)),
+                    'format': file_meta.get('format', self.XHGC_IMG_NONE),
+                    'width': file_meta.get('width', 0),
+                    'height': file_meta.get('height', 0)
                 })
 
         # 计算DATA区大小和CRC32
@@ -133,12 +148,22 @@ class BuildData:
             header_crc32 = self.pack_spec.hash.header_crc32
             image_crc32 = self.pack_spec.hash.image_crc32
 
+        existing_payload = cart_data[self.HEADER_SIZE:]
+        cart_data = (
+            header_data
+            + existing_payload
+            + index_content
+            + index_padding
+            + data_content
+            + padding
+        )
+        AddrTable.write_present_slot_payload_crcs(header_data, cart_data)
+
         # 计算并写入Header CRC32
         if header_crc32:
             header_data_with_crc = self.calculate_and_write_header_crc(header_data)
         else:
             header_data_with_crc = header_data
-        existing_payload = cart_data[self.HEADER_SIZE:]
 
         # 组装完整数据（包含更新后的header）- 顺序：INDEX在DATA之前
         cart_data = (
@@ -213,42 +238,62 @@ class BuildData:
         # 创建INDEX内容
         index_content = bytearray()
 
-        # 写入Header (8 bytes)
         entry_count = len(index_entries)
-        reserved = 0
-        index_content.extend(struct.pack('<I', entry_count))  # entry_count
-        index_content.extend(struct.pack('<I', reserved))     # reserved
+        entries_off = self.INDEX_HEADER_SIZE
+        strings_off = entries_off + entry_count * self.INDEX_ENTRY_SIZE
 
-        # 写入每个Entry
+        entries_content = bytearray()
+        strings_content = bytearray()
         for entry in index_entries:
-            # 写入16字节定长头
+            path_bytes = entry['path'].encode('utf-8') + b'\x00'
+            path_off = len(strings_content)
+            strings_content.extend(path_bytes)
+
             data_offset = entry['offset']
             data_size = entry['size']
             crc32 = entry['crc32']
-            path_bytes = entry['path'].encode('utf-8')
-            name_len = len(path_bytes)
+            entry_data = struct.pack(
+                '<IIIII BB H H H I',
+                self._fnv1a_32(entry['path']),
+                path_off,
+                data_offset,
+                data_size,
+                crc32,
+                entry.get('type', 0),
+                entry.get('format', 0),
+                entry.get('width', 0),
+                entry.get('height', 0),
+                0,  # flags
+                0   # reserved
+            )
+            assert len(entry_data) == self.INDEX_ENTRY_SIZE, (
+                f"INDEX entry length should be {self.INDEX_ENTRY_SIZE} bytes, got {len(entry_data)}"
+            )
+            entries_content.extend(entry_data)
 
-            # 确保路径长度不超过255
-            if name_len > 255:
-                raise ValueError(f"Path length exceeds 255 bytes: {entry['path']}")
-
-            # 构建16字节定长头
-            header = struct.pack('<I', data_offset)  # data_offset (4 bytes)
-            header += struct.pack('<I', data_size)   # data_size (4 bytes)
-            header += struct.pack('<I', crc32)       # crc32 (4 bytes)
-            header += struct.pack('<B', name_len)    # name_len (1 byte)
-            header += b'\x00\x00\x00'                # reserved[3] (3 bytes)
-
-            # 确保头长度为16字节
-            assert len(header) == 16, f"Header length should be 16 bytes, got {len(header)}"
-
-            # 写入定长头
-            index_content.extend(header)
-
-            # 写入变长路径（UTF-8，不含\0）
-            index_content.extend(path_bytes)
+        strings_size = len(strings_content)
+        index_content.extend(struct.pack(
+            '<8sHHIIIII',
+            self.INDEX_MAGIC,
+            self.INDEX_VERSION,
+            self.INDEX_ENTRY_SIZE,
+            entry_count,
+            entries_off,
+            strings_off,
+            strings_size,
+            0
+        ))
+        index_content.extend(entries_content)
+        index_content.extend(strings_content)
 
         return index_content
+
+    def _fnv1a_32(self, value: str) -> int:
+        h = 0x811C9DC5
+        for byte in value.encode('utf-8'):
+            h ^= byte
+            h = (h * 0x01000193) & 0xFFFFFFFF
+        return h
 
     def _find_files(self, glob_pattern: str, exclude_patterns: list) -> list:
         """
@@ -279,6 +324,98 @@ class BuildData:
                     files.append(str(file_path))
 
         return files
+
+    def _read_chunk_file(self, file_path: str, chunk_type: str, chunk: dict) -> tuple:
+        """
+        读取chunk文件内容。RES图片可选转换为BGRA8888 raw数据。
+        """
+        if chunk_type == 'RES' and self._should_convert_res_image(file_path, chunk):
+            return self._convert_res_image(file_path, chunk)
+
+        with open(file_path, 'rb') as f:
+            return f.read(), {
+                'type': self._resource_type_for_chunk(chunk_type),
+                'format': self.XHGC_IMG_NONE,
+                'width': 0,
+                'height': 0
+            }
+
+    def _resource_type_for_chunk(self, chunk_type: str) -> int:
+        if chunk_type == 'LUA':
+            return self.XHGC_RES_SCRIPT
+        return 0
+
+    def _should_convert_res_image(self, file_path: str, chunk: dict) -> bool:
+        image_format = chunk.get('image_format', 'none')
+        if not isinstance(image_format, str):
+            raise ValueError("RES image_format must be a string")
+
+        if image_format.lower() in ('none', ''):
+            return False
+
+        if image_format.upper() != 'BGRA8888':
+            raise ValueError(f"Unsupported RES image_format: {image_format}")
+
+        return Path(file_path).suffix.lower() in self.IMAGE_EXTENSIONS
+
+    def _convert_res_image(self, file_path: str, chunk: dict) -> tuple:
+        preprocess = chunk.get('image_preprocess', {})
+        if preprocess is None:
+            preprocess = {}
+        if not isinstance(preprocess, dict):
+            raise ValueError("RES image_preprocess must be an object")
+
+        width = preprocess.get('width')
+        height = preprocess.get('height')
+        mode = preprocess.get('mode', 'contain')
+        background = preprocess.get('background', '#000000')
+        resample = preprocess.get('resample', 'lanczos')
+
+        try:
+            from xhcart_core.tools.img_pillow import process_resource_image_with_metadata
+        except ImportError as e:
+            raise ImportError("Pillow is required for RES image conversion. Please install it with 'pip install Pillow'") from e
+
+        try:
+            raw_data, actual_width, actual_height = process_resource_image_with_metadata(
+                image_path=Path(file_path),
+                width=width,
+                height=height,
+                mode=mode,
+                background=background,
+                resample=resample
+            )
+            if chunk.get('image_metadata', False):
+                raw_data = self._build_res_image_container(raw_data, actual_width, actual_height)
+            return raw_data, {
+                'type': self.XHGC_RES_IMAGE,
+                'format': self.XHGC_IMG_BGRA8888,
+                'width': actual_width,
+                'height': actual_height
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to convert RES image to BGRA8888: {file_path}: {str(e)}") from e
+
+    def _build_res_image_container(self, raw_data: bytes, width: int, height: int) -> bytes:
+        stride = width * 4
+        expected_size = stride * height
+        if len(raw_data) != expected_size:
+            raise ValueError(f"BGRA8888 data size mismatch: expected {expected_size}, got {len(raw_data)}")
+
+        header = struct.pack(
+            '<4sHHHHBBHII',
+            self.RES_IMAGE_MAGIC,
+            1,  # version
+            self.RES_IMAGE_HEADER_SIZE,
+            width,
+            height,
+            self.RES_IMAGE_FORMAT_BGRA8888,
+            4,  # bytes_per_pixel
+            0,  # flags
+            stride,
+            len(raw_data)
+        )
+        return header + raw_data
 
     def _calculate_relative_path(self, file_path: str, strip_prefix: str) -> str:
         """

@@ -1,4 +1,5 @@
 import struct
+from xhcart_core.utils.hashing import calculate_crc32
 
 class AddrTable:
     """
@@ -57,6 +58,56 @@ class AddrTable:
         
         # 写入crc32 (u32, little-endian)
         struct.pack_into('<I', header, slot_off + 12, crc32)
+
+    @classmethod
+    def read_slot(cls, header: bytes, slot_index: int):
+        """
+        读取槽位数据
+
+        Args:
+            header (bytes): header数据
+            slot_index (int): 槽位索引
+
+        Returns:
+            tuple: (offset, size, crc32)
+        """
+        if slot_index < 0 or slot_index >= cls.SLOT_COUNT:
+            raise ValueError(f"Invalid slot index: {slot_index}")
+
+        slot_off = cls.slot_offset(slot_index)
+        offset = struct.unpack_from('<Q', header, slot_off)[0]
+        size = struct.unpack_from('<I', header, slot_off + 8)[0]
+        crc32 = struct.unpack_from('<I', header, slot_off + 12)[0]
+        return offset, size, crc32
+
+    @classmethod
+    def write_present_slot_payload_crcs(cls, header: bytearray, cart_data: bytes):
+        """
+        为所有已有payload的slot回填CRC32。
+
+        Args:
+            header (bytearray): 待更新的header数据
+            cart_data (bytes): 完整cart镜像数据
+        """
+        for slot_index in range(cls.SLOT_COUNT):
+            # slot14 stores the whole-image CRC metadata, not a payload range.
+            if slot_index == cls.SLOT_IMAGE_CRC:
+                continue
+
+            offset, size, _ = cls.read_slot(header, slot_index)
+            if size == 0:
+                continue
+
+            end = offset + size
+            if end > len(cart_data):
+                raise ValueError(
+                    f"Slot {slot_index} payload range out of cart image: "
+                    f"offset=0x{offset:X}, size=0x{size:X}, cart_size=0x{len(cart_data):X}"
+                )
+
+            crc32 = calculate_crc32(cart_data[offset:end])
+            slot_off = cls.slot_offset(slot_index)
+            struct.pack_into('<I', header, slot_off + 12, crc32)
     
     @classmethod
     def clear_all_slots(cls, header: bytearray):

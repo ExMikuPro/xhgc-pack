@@ -1,6 +1,24 @@
 from PIL import Image, ImageOps
 from pathlib import Path
 
+
+def _image_to_bgra8888(img: Image.Image, width: int, height: int) -> bytes:
+    """
+    将RGBA图片转换为ARGB8888语义、BGRA字节序的raw数据。
+    """
+    raw_data = bytearray()
+    pixels = img.load()
+    for y in range(height):
+        for x in range(width):
+            r, g, b, a = pixels[x, y]
+            raw_data.extend(bytes([b, g, r, a]))
+
+    expected_length = width * height * 4
+    if len(raw_data) != expected_length:
+        raise ValueError(f"Raw data length mismatch: expected {expected_length}, got {len(raw_data)}")
+
+    return bytes(raw_data)
+
 def _hex_to_rgba(hex_color: str) -> tuple:
     """
     将十六进制颜色转换为RGBA元组
@@ -90,16 +108,46 @@ def process_image(image_path: Path, width: int, height: int, mode: str = 'cover'
             raise ValueError(f"Image resizing failed: expected {width}x{height}, got {img.width}x{img.height}")
 
         # 转换为little-endian ARGB8888 raw格式，按B,G,R,A字节顺序写出
-        raw_data = bytearray()
-        pixels = img.load()
-        for y in range(height):
-            for x in range(width):
-                r, g, b, a = pixels[x, y]
-                raw_data.extend(bytes([b, g, r, a]))
+        return _image_to_bgra8888(img, width, height)
 
-        # 验证数据长度
-        expected_length = width * height * 4
-        if len(raw_data) != expected_length:
-            raise ValueError(f"Raw data length mismatch: expected {expected_length}, got {len(raw_data)}")
 
-        return bytes(raw_data)
+def process_resource_image_with_metadata(image_path: Path, width: int = None, height: int = None, mode: str = 'contain', background: str = '#000000', resample: str = 'lanczos') -> tuple:
+    """
+    将RES图片转换为ARGB8888语义、BGRA字节序的raw数据，并返回实际尺寸。
+
+    如果未指定width/height，则保留源图尺寸，仅转换像素格式。
+    """
+    if (width is None) != (height is None):
+        raise ValueError("Both width and height must be provided for resource image resizing")
+
+    with Image.open(image_path) as img:
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+
+        if width is None and height is None:
+            return _image_to_bgra8888(img, img.width, img.height), img.width, img.height
+
+    raw_data = process_image(
+        image_path=image_path,
+        width=width,
+        height=height,
+        mode=mode,
+        background=background,
+        resample=resample
+    )
+    return raw_data, width, height
+
+
+def process_resource_image(image_path: Path, width: int = None, height: int = None, mode: str = 'contain', background: str = '#000000', resample: str = 'lanczos') -> bytes:
+    """
+    将RES图片转换为ARGB8888语义、BGRA字节序的raw数据。
+    """
+    raw_data, _, _ = process_resource_image_with_metadata(
+        image_path=image_path,
+        width=width,
+        height=height,
+        mode=mode,
+        background=background,
+        resample=resample
+    )
+    return raw_data

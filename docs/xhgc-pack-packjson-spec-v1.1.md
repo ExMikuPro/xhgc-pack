@@ -87,6 +87,13 @@
 | `/chunks[i]/strip_prefix` | string | ⭕ |  | **新增建议**：显式剪掉输入路径前缀，防止重复前缀 | v1.1 新增 |
 | `/chunks[i]/exclude` | string[] | ⭕ | `[]` | **新增建议**：排除模式列表，如 `["**/.DS_Store", "**/*.psd"]` | v1.1 新增 |
 | `/chunks[i]/order` | string | ⭕ | `"lex"` | **新增建议**：排序策略（当前仅支持 `"lex"` 字典序），用于可重复构建 | v1.1 新增 |
+| `/chunks[i]/image_format` | string | ⭕ | `"none"` | RES 专用：图片资源转换格式，当前支持 `"none"` / `"BGRA8888"`；启用后匹配到的图片按 raw `B,G,R,A` 字节写入 DATA | v1.1 新增 |
+| `/chunks[i]/image_preprocess` | object | ⭕ |  | RES 图片转换预处理；未设置宽高时保留源图尺寸，仅转换像素格式 | v1.1 新增 |
+| `/chunks[i]/image_preprocess/width` | int | ⭕ |  | RES 图片转换目标宽度；必须与 `height` 同时设置 | v1.1 新增 |
+| `/chunks[i]/image_preprocess/height` | int | ⭕ |  | RES 图片转换目标高度；必须与 `width` 同时设置 | v1.1 新增 |
+| `/chunks[i]/image_preprocess/mode` | string | ⭕ | `"contain"` | contain / cover；与 icon 预处理语义一致 | v1.1 新增 |
+| `/chunks[i]/image_preprocess/background` | string | ⭕ | `"#000000"` | contain 模式下的背景/补边色（`#RRGGBB` 或 `#AARRGGBB`） | v1.1 新增 |
+| `/chunks[i]/image_preprocess/resample` | string | ⭕ | `"lanczos"` | nearest / bilinear / bicubic / lanczos | v1.1 新增 |
 
 ---
 
@@ -99,7 +106,7 @@
 | `RES` | slot5 (DATA) | 资源文件数据块（与 LUA 合并写入 DATA 区） |
 
 > `MANF` **建议排在 `chunks` 列表第一位**，以保证 bin 中 manifest 优先写入，便于固件端快速读取元信息。  
-> INDEX（slot4）由打包器根据 DATA 区内容自动生成，**不需要**在 `pack.json` 中声明。
+> INDEX（slot4）由打包器根据 DATA 区内容自动生成，**不需要**在 `pack.json` 中声明；当前输出格式为 `XHGCIDX2`。
 
 ### 3.1 MANF 二进制格式
 
@@ -263,6 +270,14 @@ typedef struct __attribute__((packed)) {
       "strip_prefix": "assets/lvgl/",
       "name_prefix": "assets/lvgl/",
       "compress": "none",
+      "image_format": "BGRA8888",
+      "image_preprocess": {
+        "width": 200,
+        "height": 200,
+        "mode": "contain",
+        "background": "#000000",
+        "resample": "lanczos"
+      },
       "exclude": ["**/.DS_Store"]
     }
   ]
