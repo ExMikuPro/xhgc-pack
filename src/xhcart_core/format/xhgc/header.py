@@ -53,7 +53,7 @@ class HeaderV2:
     STRING_LENGTH_PUBLISHER = 64
     STRING_LENGTH_VERSION = 32
     STRING_LENGTH_ENTRY = 128
-    STRING_LENGTH_MIN_FW = 16
+    STRING_LENGTH_MIN_FW = 32
     
     def __init__(self, pack_spec: PackSpec):
         """
@@ -146,8 +146,8 @@ class HeaderV2:
         
         # 写入min_fw
         min_fw = self.pack_spec.meta.min_fw.encode('utf-8')
-        if len(min_fw) > self.STRING_LENGTH_MIN_FW - 1:
-            raise ValueError(f"meta.min_fw exceeds {self.STRING_LENGTH_MIN_FW - 1} bytes")
+        if len(min_fw) > self.STRING_LENGTH_MIN_FW:
+            raise ValueError(f"meta.min_fw exceeds {self.STRING_LENGTH_MIN_FW} bytes")
         min_fw_padded = min_fw.ljust(self.STRING_LENGTH_MIN_FW, b'\x00')
         struct.pack_into(f'<{self.STRING_LENGTH_MIN_FW}s', header, self.OFFSET_MIN_FW, min_fw_padded)
         
@@ -241,8 +241,8 @@ class HeaderV2:
         
         # 写入min_fw
         min_fw = self.pack_spec.meta.min_fw.encode('utf-8')
-        if len(min_fw) > self.STRING_LENGTH_MIN_FW - 1:
-            raise ValueError(f"meta.min_fw exceeds {self.STRING_LENGTH_MIN_FW - 1} bytes")
+        if len(min_fw) > self.STRING_LENGTH_MIN_FW:
+            raise ValueError(f"meta.min_fw exceeds {self.STRING_LENGTH_MIN_FW} bytes")
         min_fw_padded = min_fw.ljust(self.STRING_LENGTH_MIN_FW, b'\x00')
         struct.pack_into(f'<{self.STRING_LENGTH_MIN_FW}s', header, self.OFFSET_MIN_FW, min_fw_padded)
         

@@ -96,11 +96,11 @@ class Header:
         
         # 写入min_fw
         min_fw = meta.get('min_fw', '0.0.0').encode('utf-8')
-        if len(min_fw) > 16:
-            raise ValueError("meta.min_fw exceeds 16 bytes")
-        min_fw_padded = min_fw.ljust(16, b'\x00')
-        struct.pack_into('<16s', header, 372, min_fw_padded)
-        fields.append(('meta.min_fw', 372, 16, min_fw.decode('utf-8')))
+        if len(min_fw) > 32:
+            raise ValueError("meta.min_fw exceeds 32 bytes")
+        min_fw_padded = min_fw.ljust(32, b'\x00')
+        struct.pack_into('<32s', header, 372, min_fw_padded)
+        fields.append(('meta.min_fw', 372, 32, min_fw.decode('utf-8')))
         
         # 写入预留字段（填0）
         reserved_fields = [

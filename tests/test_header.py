@@ -95,6 +95,32 @@ class TestHeader:
             assert False, "Should raise ValueError for long title"
         except ValueError as e:
             assert "meta.title exceeds" in str(e)
+
+    def test_min_fw_accepts_32_bytes(self):
+        """
+        测试min_fw按32字节处理。
+        """
+        pack_json = copy.deepcopy(self.base_pack_json)
+        pack_json['meta']['min_fw'] = 'A' * 32
+        self.write_pack_json(pack_json)
+        pack_header(self.pack_json_path, self.header_bin_path)
+
+        info = inspect_header(self.header_bin_path)
+        assert info['min_fw'] == 'A' * 32
+
+    def test_min_fw_rejects_more_than_32_bytes(self):
+        """
+        测试min_fw超过32字节会抛异常。
+        """
+        pack_json = copy.deepcopy(self.base_pack_json)
+        pack_json['meta']['min_fw'] = 'A' * 33
+        self.write_pack_json(pack_json)
+
+        try:
+            pack_header(self.pack_json_path, self.header_bin_path)
+            assert False, "Should raise ValueError for long min_fw"
+        except ValueError as e:
+            assert "meta.min_fw exceeds 32 bytes" in str(e)
     
     def test_cart_id_parsing(self):
         """
